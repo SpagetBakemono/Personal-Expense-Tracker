@@ -1,0 +1,100 @@
+{% extends "base.html" %}
+{% block title %}Dashboard{% endblock %}
+{% block content %}
+
+<h2>{{ month_name }}</h2>
+<div class="grid">
+  <div class="card">
+    <p class="stat-label">Income</p>
+    <p class="stat-value">${{ "%.2f"|format(summary.income) }}</p>
+  </div>
+  <div class="card">
+    <p class="stat-label">Expenses</p>
+    <p class="stat-value">${{ "%.2f"|format(summary.expenses) }}</p>
+  </div>
+  <div class="card">
+    <p class="stat-label">Net</p>
+    <p class="stat-value {{ 'positive' if summary.net >= 0 else 'negative' }}">
+      {{ '+' if summary.net >= 0 else '' }}${{ "%.2f"|format(summary.net) }}
+    </p>
+  </div>
+  <div class="card">
+    <p class="stat-label">12-mo avg monthly spend</p>
+    <p class="stat-value">${{ "%.2f"|format(trailing_avg) }}</p>
+  </div>
+</div>
+
+<h2>Spending by category</h2>
+{% if summary.by_category %}
+  {% for name, amount in summary.by_category.items() %}
+  <div class="bar-row">
+    <div class="bar-label">{{ name }}</div>
+    <div class="bar-track"><div class="bar-fill" style="width: {{ (amount / max_category * 100)|round(1) }}%"></div></div>
+    <div class="bar-amount">${{ "%.2f"|format(amount) }}</div>
+  </div>
+  {% endfor %}
+{% else %}
+  <p class="empty">No expenses logged this month yet.</p>
+{% endif %}
+
+<h2>Accounts</h2>
+{% if balances %}
+<table>
+  <thead><tr><th>Account</th><th>Balance</th></tr></thead>
+  <tbody>
+    {% for account, balance in balances %}
+    <tr>
+      <td>{{ account.name }} <span class="badge">{{ account.type.value.replace('_', ' ') }}</span></td>
+      <td class="{{ 'amount expense' if account.type.value == 'credit_card' and balance > 0 else '' }}">
+        {% if account.type.value == 'credit_card' %}${{ "%.2f"|format(balance) }} owed{% else %}${{ "%.2f"|format(balance) }}{% endif %}
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No accounts yet. <a href="/accounts/new">Add your first account</a> to get started.</p>
+{% endif %}
+
+{% if pending %}
+<h2>Pending reimbursements</h2>
+<table>
+  <thead><tr><th>Date</th><th>Note</th><th>Amount</th><th></th></tr></thead>
+  <tbody>
+    {% for t in pending %}
+    <tr>
+      <td>{{ t.date.isoformat() }}</td>
+      <td>{{ t.note or (t.category.name if t.category else '') }}</td>
+      <td class="amount expense">${{ "%.2f"|format(t.amount) }}</td>
+      <td>
+        <form method="post" action="/transactions/{{ t.id }}/mark-reimbursed" style="margin:0;">
+          <button type="submit" style="padding:4px 10px;font-size:12px;">Mark received</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% endif %}
+
+<h2>Recent transactions</h2>
+{% if summary.transactions %}
+<table>
+  <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Note</th><th>Amount</th></tr></thead>
+  <tbody>
+    {% for t in summary.transactions[:15] %}
+    <tr>
+      <td>{{ t.date.isoformat() }}</td>
+      <td><span class="badge">{{ t.type.value }}</span></td>
+      <td>{{ t.category.name if t.category else '—' }}</td>
+      <td>{{ t.note or '' }}</td>
+      <td class="amount {{ 'expense' if t.type.value == 'expense' else 'income' }}">${{ "%.2f"|format(t.amount) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">No transactions yet this month.</p>
+{% endif %}
+
+{% endblock %}

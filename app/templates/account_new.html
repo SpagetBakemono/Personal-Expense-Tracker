@@ -1,0 +1,33 @@
+{% extends "base.html" %}
+{% block title %}Add Account{% endblock %}
+{% block content %}
+<h2>Add account</h2>
+<form class="form-card" method="post" action="/accounts">
+  <div>
+    <label for="name">Name</label>
+    <input id="name" name="name" placeholder="e.g. Checking, Chase Sapphire" required />
+  </div>
+  <div>
+    <label for="type">Type</label>
+    <select id="type" name="type" required>
+      {% for t in account_types %}
+      <option value="{{ t.value }}">{{ t.value.replace('_', ' ') }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div class="row">
+    <div>
+      <label for="opening_balance">
+        Opening balance
+        <span class="badge">for credit cards, enter what you currently owe</span>
+      </label>
+      <input id="opening_balance" name="opening_balance" type="number" step="0.01" value="0.00" />
+    </div>
+    <div>
+      <label for="opening_balance_date">As of</label>
+      <input id="opening_balance_date" name="opening_balance_date" type="date" value="{{ today if today else '' }}" required />
+    </div>
+  </div>
+  <button type="submit">Add account</button>
+</form>
+{% endblock %}

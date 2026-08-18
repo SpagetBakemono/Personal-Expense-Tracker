@@ -1,0 +1,24 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>{% block title %}Expense Tracker{% endblock %}</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <header class="topbar">
+    <a class="brand" href="/">Expense Tracker</a>
+    <nav>
+      <a href="/">Dashboard</a>
+      <a href="/transactions/new">Add</a>
+      <a href="/accounts">Accounts</a>
+    </nav>
+  </header>
+  <main class="container">
+    {% with messages = get_flashed_messages() if get_flashed_messages is defined else [] %}
+    {% endwith %}
+    {% block content %}{% endblock %}
+  </main>
+</body>
+</html>
