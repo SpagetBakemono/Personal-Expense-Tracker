@@ -21,7 +21,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
     today = date.today()
     summary = get_month_summary(db, today.year, today.month)
     balances = get_all_balances(db)
-    trailing_avg = get_trailing_average_expense(db)
+    trailing_avg, trailing_avg_months = get_trailing_average_expense(db)
     pending = get_pending_reimbursements(db)
 
     max_category = max(summary["by_category"].values()) if summary["by_category"] else 1
@@ -33,6 +33,7 @@ def dashboard(request: Request, db: Session = Depends(get_db)):
             "summary": summary,
             "balances": balances,
             "trailing_avg": trailing_avg,
+            "trailing_avg_months": trailing_avg_months,
             "pending": pending,
             "max_category": max_category,
             "month_name": today.strftime("%B %Y"),

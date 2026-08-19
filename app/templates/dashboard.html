@@ -19,7 +19,9 @@
     </p>
   </div>
   <div class="card">
-    <p class="stat-label">12-mo avg monthly spend</p>
+    <p class="stat-label">
+      {{ trailing_avg_months }}-mo avg monthly spend
+    </p>
     <p class="stat-value">${{ "%.2f"|format(trailing_avg) }}</p>
   </div>
 </div>

@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -89,12 +89,31 @@ def get_month_summary(db: Session, year: int, month: int) -> dict:
     }
 
 
-def get_trailing_average_expense(db: Session, months: int = 12) -> Decimal:
+def get_trailing_average_expense(db: Session, months: int = 12) -> tuple[Decimal, int]:
     """Smoothed monthly spend, so a single lumpy cost (tuition, etc.)
     doesn't make one month look catastrophic and the rest artificially
-    frugal -- shown alongside the raw monthly total, not instead of it."""
+    frugal -- shown alongside the raw monthly total, not instead of it.
+
+    Divides by however many months of expense history actually exist
+    (capped at `months`), not always by `months` -- otherwise a fresh
+    ledger with a few days of data would understate the average by 10-20x
+    until a full window of history accumulates. Returns (average, months
+    the average is actually based on) so the UI can label it honestly.
+    """
     today = date.today()
-    start = date(today.year, today.month, 1) - relativedelta(months=months)
+    # "Trailing `months`" = this (partial) month plus the (months - 1)
+    # months before it, so the window spans exactly `months` calendar-month
+    # buckets -- keeps the numerator (summed months) and denominator
+    # (months_covered below) counting the same thing.
+    window_start = date(today.year, today.month, 1) - relativedelta(months=months - 1)
+
+    earliest = db.scalar(
+        select(func.min(Transaction.date)).where(Transaction.type == TransactionType.EXPENSE)
+    )
+    if earliest is None:
+        return Decimal(0), 0
+
+    start = max(window_start, date(earliest.year, earliest.month, 1))
 
     txns = db.scalars(
         select(Transaction).where(
@@ -103,7 +122,11 @@ def get_trailing_average_expense(db: Session, months: int = 12) -> Decimal:
         )
     ).all()
     total = sum((t.amount for t in txns), Decimal(0))
-    return total / months if months else Decimal(0)
+
+    months_covered = (today.year - start.year) * 12 + (today.month - start.month) + 1
+    months_covered = max(1, min(months, months_covered))
+
+    return total / months_covered, months_covered
 
 
 def get_pending_reimbursements(db: Session) -> list[Transaction]:
