@@ -64,6 +64,10 @@
     <label><input type="checkbox" name="reimbursable" value="1" {{ "checked" if txn and txn.reimbursable else "" }} style="width:auto;display:inline-block;" /> Reimbursable (I'll get this money back)</label>
   </div>
 
+  <div id="exclude_from_living_field">
+    <label><input type="checkbox" name="exclude_from_living" value="1" {{ "checked" if txn and txn.exclude_from_living else "" }} style="width:auto;display:inline-block;" /> Not a living expense (tuition, a deposit, etc. -- excluded from Living Expenses)</label>
+  </div>
+
   <button type="submit">{{ "Save changes" if txn else "Save" }}</button>
 </form>
 
@@ -80,6 +84,7 @@ function toggleFields() {
   document.getElementById('to_account_field').style.display = (type === 'transfer') ? 'block' : 'none';
   document.getElementById('category_field').style.display = (type === 'transfer') ? 'none' : 'block';
   document.getElementById('reimbursable_field').style.display = (type === 'expense') ? 'block' : 'none';
+  document.getElementById('exclude_from_living_field').style.display = (type === 'expense') ? 'block' : 'none';
 }
 toggleFields();
 </script>

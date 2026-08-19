@@ -12,7 +12,7 @@ from datetime import date
 from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
-from sqlalchemy import func, select
+from sqlalchemy import func, or_, select
 from sqlalchemy.orm import Session
 
 from app.models import (
@@ -91,16 +91,36 @@ def get_total_balance(balances: list[tuple[Account, Decimal]]) -> Decimal:
     return total
 
 
-def get_month_summary(db: Session, year: int, month: int) -> dict:
+def get_month_summary(
+    db: Session, year: int, month: int, account_id: int | None = None
+) -> dict:
     start = date(year, month, 1)
     end = start + relativedelta(months=1)
 
-    txns = db.scalars(
-        select(Transaction).where(Transaction.date >= start, Transaction.date < end)
-    ).all()
+    query = select(Transaction).where(Transaction.date >= start, Transaction.date < end)
+    if account_id is not None:
+        # Matches either side so a transfer shows up whichever account
+        # you're looking at -- e.g. paying down a card shows as an
+        # outflow on checking and an inflow on the card.
+        query = query.where(
+            or_(Transaction.account_id == account_id, Transaction.to_account_id == account_id)
+        )
+    txns = db.scalars(query).all()
 
     income = sum((t.amount for t in txns if t.type == TransactionType.INCOME), Decimal(0))
     expenses = sum((t.amount for t in txns if t.type == TransactionType.EXPENSE), Decimal(0))
+    # Same as `expenses` but skips anything flagged exclude_from_living
+    # (tuition, a deposit, ...) -- shown alongside the real total, not
+    # instead of it, so a big one-off doesn't drown out day-to-day spend
+    # without also hiding that it happened.
+    living_expenses = sum(
+        (
+            t.amount
+            for t in txns
+            if t.type == TransactionType.EXPENSE and not t.exclude_from_living
+        ),
+        Decimal(0),
+    )
 
     by_category: dict[str, Decimal] = defaultdict(lambda: Decimal(0))
     for t in txns:
@@ -111,7 +131,9 @@ def get_month_summary(db: Session, year: int, month: int) -> dict:
         "start": start,
         "income": income,
         "expenses": expenses,
+        "living_expenses": living_expenses,
         "net": income - expenses,
+        "living_net": income - living_expenses,
         "by_category": dict(sorted(by_category.items(), key=lambda kv: -kv[1])),
         "transactions": sorted(txns, key=lambda t: t.date, reverse=True),
     }
@@ -251,17 +273,19 @@ def get_monthly_all_categories_trend(db: Session, start: date, months: int) -> l
     return result
 
 
-def get_trailing_average_expense(db: Session, months: int = 12) -> tuple[Decimal, int]:
-    """Smoothed monthly spend, so a single lumpy cost (tuition, etc.)
-    doesn't make one month look catastrophic and the rest artificially
-    frugal -- shown alongside the raw monthly total, not instead of it.
-
-    Divides by however many months of expense history actually exist
+def _trailing_average(
+    db: Session,
+    txn_type: TransactionType,
+    months: int,
+    account_id: int | None,
+    living_only: bool,
+) -> tuple[Decimal, int]:
+    """Shared windowing logic behind get_trailing_average_expense/income:
+    divides by however many months of matching history actually exist
     (capped at `months`), not always by `months` -- otherwise a fresh
     ledger with a few days of data would understate the average by 10-20x
     until a full window of history accumulates. Returns (average, months
-    the average is actually based on) so the UI can label it honestly.
-    """
+    the average is actually based on) so the UI can label it honestly."""
     today = date.today()
     # "Trailing `months`" = this (partial) month plus the (months - 1)
     # months before it, so the window spans exactly `months` calendar-month
@@ -269,20 +293,21 @@ def get_trailing_average_expense(db: Session, months: int = 12) -> tuple[Decimal
     # (months_covered below) counting the same thing.
     window_start = date(today.year, today.month, 1) - relativedelta(months=months - 1)
 
-    earliest = db.scalar(
-        select(func.min(Transaction.date)).where(Transaction.type == TransactionType.EXPENSE)
-    )
+    def _scope(query):
+        query = query.where(Transaction.type == txn_type)
+        if account_id is not None:
+            query = query.where(Transaction.account_id == account_id)
+        if living_only:
+            query = query.where(Transaction.exclude_from_living == False)  # noqa: E712
+        return query
+
+    earliest = db.scalar(_scope(select(func.min(Transaction.date))))
     if earliest is None:
         return Decimal(0), 0
 
     start = max(window_start, date(earliest.year, earliest.month, 1))
 
-    txns = db.scalars(
-        select(Transaction).where(
-            Transaction.date >= start,
-            Transaction.type == TransactionType.EXPENSE,
-        )
-    ).all()
+    txns = db.scalars(_scope(select(Transaction)).where(Transaction.date >= start)).all()
     total = sum((t.amount for t in txns), Decimal(0))
 
     months_covered = (today.year - start.year) * 12 + (today.month - start.month) + 1
@@ -291,13 +316,37 @@ def get_trailing_average_expense(db: Session, months: int = 12) -> tuple[Decimal
     return total / months_covered, months_covered
 
 
-def get_pending_reimbursements(db: Session) -> list[Transaction]:
-    return db.scalars(
-        select(Transaction).where(
-            Transaction.reimbursable == True,  # noqa: E712
-            Transaction.reimbursement_status == ReimbursementStatus.PENDING,
-        )
-    ).all()
+def get_trailing_average_expense(
+    db: Session,
+    months: int = 12,
+    account_id: int | None = None,
+    living_only: bool = False,
+) -> tuple[Decimal, int]:
+    """Smoothed monthly spend, so a single lumpy cost (tuition, etc.)
+    doesn't make one month look catastrophic and the rest artificially
+    frugal -- shown alongside the raw monthly total, not instead of it.
+    living_only=True excludes anything flagged exclude_from_living, for
+    the "typical living expense" figure."""
+    return _trailing_average(db, TransactionType.EXPENSE, months, account_id, living_only)
+
+
+def get_trailing_average_income(
+    db: Session, months: int = 12, account_id: int | None = None
+) -> tuple[Decimal, int]:
+    """Same idea as get_trailing_average_expense but for income -- no
+    living_only variant since exclude_from_living only applies to
+    expenses."""
+    return _trailing_average(db, TransactionType.INCOME, months, account_id, living_only=False)
+
+
+def get_pending_reimbursements(db: Session, account_id: int | None = None) -> list[Transaction]:
+    query = select(Transaction).where(
+        Transaction.reimbursable == True,  # noqa: E712
+        Transaction.reimbursement_status == ReimbursementStatus.PENDING,
+    )
+    if account_id is not None:
+        query = query.where(Transaction.account_id == account_id)
+    return db.scalars(query).all()
 
 
 DEFAULT_EXPENSE_CATEGORIES = [

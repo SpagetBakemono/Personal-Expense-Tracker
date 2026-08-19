@@ -102,6 +102,11 @@ class Transaction(Base):
         SAEnum(ReimbursementStatus), nullable=True
     )
 
+    # A big one-off cost (tuition, a deposit) that shouldn't count toward
+    # "living expenses" -- lets the dashboard show spend with and without
+    # it, instead of one number that either hides or overstates it.
+    exclude_from_living: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     account: Mapped["Account"] = relationship(

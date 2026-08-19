@@ -84,6 +84,17 @@ body {
 .stat-value.negative { color: var(--danger); }
 .stat-value.positive { color: var(--good); }
 
+.stat-sub {
+  margin: 4px 0 0;
+  font-size: 12px;
+  color: var(--muted);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Section label above a row of stat cards (e.g. "All spending" /
+   "Living expenses") -- same visual weight as a table header. */
+.row-label { font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--muted); margin: 0 0 8px; }
+
 h2 { font-size: 15px; text-transform: uppercase; letter-spacing: 0.03em; color: var(--muted); margin: 28px 0 12px; }
 
 table { width: 100%; border-collapse: collapse; }
