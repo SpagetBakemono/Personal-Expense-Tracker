@@ -4,12 +4,13 @@
 <h2>Accounts</h2>
 {% if balances %}
 <table>
-  <thead><tr><th>Name</th><th>Type</th><th>Balance</th></tr></thead>
+  <thead><tr><th>Name</th><th>Type</th><th>Opening balance</th><th>Balance</th><th></th></tr></thead>
   <tbody>
     {% for account, balance in balances %}
     <tr>
       <td>{{ account.name }}</td>
       <td><span class="badge">{{ account.type.value.replace('_', ' ') }}</span></td>
+      <td>${{ "%.2f"|format(account.opening_balance) }} <span class="badge">{{ account.opening_balance_date.isoformat() }}</span></td>
       <td class="{{ 'amount expense' if account.type.value == 'credit_card' and balance > 0 else '' }}">
         {% if account.type.value == 'credit_card' %}
           {{ "$%.2f owed"|format(balance) if balance > 0 else "$0.00" }}
@@ -17,6 +18,7 @@
           ${{ "%.2f"|format(balance) }}
         {% endif %}
       </td>
+      <td><a href="/accounts/{{ account.id }}/edit">Edit</a></td>
     </tr>
     {% endfor %}
   </tbody>

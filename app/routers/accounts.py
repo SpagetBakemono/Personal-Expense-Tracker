@@ -53,3 +53,41 @@ def create_account(
     db.add(account)
     db.commit()
     return RedirectResponse(url="/accounts", status_code=303)
+
+
+@router.get("/accounts/{account_id}/edit")
+def edit_account_form(account_id: int, request: Request, db: Session = Depends(get_db)):
+    account = db.get(Account, account_id)
+    if account is None:
+        return RedirectResponse(url="/accounts", status_code=303)
+    return templates.TemplateResponse(
+        request,
+        "account_new.html",
+        {"account_types": list(AccountType), "today": date.today().isoformat(), "account": account},
+    )
+
+
+@router.post("/accounts/{account_id}/edit")
+def update_account(
+    account_id: int,
+    name: str = Form(...),
+    type: str = Form(...),
+    opening_balance: str = Form("0"),
+    opening_balance_date: str = Form(...),
+    db: Session = Depends(get_db),
+):
+    account = db.get(Account, account_id)
+    if account is None:
+        return RedirectResponse(url="/accounts", status_code=303)
+
+    try:
+        balance = Decimal(opening_balance or "0")
+    except InvalidOperation:
+        balance = Decimal(0)
+
+    account.name = name.strip()
+    account.type = AccountType(type)
+    account.opening_balance = balance
+    account.opening_balance_date = date.fromisoformat(opening_balance_date)
+    db.commit()
+    return RedirectResponse(url="/accounts", status_code=303)

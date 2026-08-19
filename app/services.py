@@ -55,7 +55,10 @@ def get_account_balance(db: Session, account: Account) -> Decimal:
 
     for t in outgoing:
         if t.type == TransactionType.INCOME:
-            balance += t.amount
+            # A credit/refund posted directly to a card (cashback, a
+            # merchant credit) reduces what you owe, same direction as an
+            # incoming transfer below -- it doesn't add to it.
+            balance += -t.amount if is_liability else t.amount
         elif t.type == TransactionType.EXPENSE:
             # On a credit card, spending increases what you owe.
             # On cash/checking, spending decreases what you have.
