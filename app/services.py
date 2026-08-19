@@ -63,6 +63,16 @@ def get_all_balances(db: Session) -> list[tuple[Account, Decimal]]:
     return [(a, get_account_balance(db, a)) for a in accounts]
 
 
+def get_total_balance(balances: list[tuple[Account, Decimal]]) -> Decimal:
+    """Net total across accounts. Credit card balances are what you owe
+    (a liability), so they subtract rather than add -- otherwise carrying
+    card debt would make your total look bigger, not smaller."""
+    total = Decimal(0)
+    for account, balance in balances:
+        total += -balance if account.type == AccountType.CREDIT_CARD else balance
+    return total
+
+
 def get_month_summary(db: Session, year: int, month: int) -> dict:
     start = date(year, month, 1)
     end = start + relativedelta(months=1)

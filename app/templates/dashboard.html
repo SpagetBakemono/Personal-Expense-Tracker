@@ -41,6 +41,12 @@
 
 <h2>Accounts</h2>
 {% if balances %}
+<div class="card" style="margin-bottom: 16px;">
+  <p class="stat-label">Total balance</p>
+  <p class="stat-value {{ 'positive' if total_balance >= 0 else 'negative' }}">
+    ${{ "%.2f"|format(total_balance) }}
+  </p>
+</div>
 <table>
   <thead><tr><th>Account</th><th>Balance</th></tr></thead>
   <tbody>
