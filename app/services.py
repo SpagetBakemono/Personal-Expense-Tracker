@@ -1,6 +1,6 @@
 """
 Business logic that isn't just CRUD -- balance calculation, monthly
-summaries, and the reimbursement/cadence views we designed for.
+summaries, and the reimbursement views we designed for.
 
 Balances are computed on the fly from the transaction log rather than
 stored as a running counter on Account. For a personal-scale dataset this

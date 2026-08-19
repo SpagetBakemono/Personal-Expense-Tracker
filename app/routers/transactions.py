@@ -2,22 +2,20 @@ from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
-from fastapi.templating import Jinja2Templates
 from sqlalchemy import select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import (
     Account,
-    Cadence,
     Category,
     ReimbursementStatus,
     Transaction,
     TransactionType,
 )
+from app.templating import templates
 
 router = APIRouter()
-templates = Jinja2Templates(directory="app/templates")
 
 
 @router.get("/transactions/new")
@@ -31,7 +29,6 @@ def new_transaction_form(request: Request, db: Session = Depends(get_db)):
             "accounts": accounts,
             "categories": categories,
             "today": date.today().isoformat(),
-            "cadences": list(Cadence),
         },
     )
 
@@ -45,7 +42,6 @@ def create_transaction(
     to_account_id: str = Form(""),
     category_id: str = Form(""),
     note: str = Form(""),
-    cadence: str = Form("one_time"),
     reimbursable: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -59,7 +55,6 @@ def create_transaction(
         to_account_id=int(to_account_id) if (txn_type == TransactionType.TRANSFER and to_account_id) else None,
         category_id=int(category_id) if category_id else None,
         note=note.strip() or None,
-        cadence=Cadence(cadence),
         reimbursable=bool(reimbursable) and txn_type == TransactionType.EXPENSE,
     )
     if txn.reimbursable:

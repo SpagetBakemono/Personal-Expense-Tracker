@@ -11,8 +11,10 @@ This encodes the design decisions from planning:
   see get_account_balance() in services.py for how balances are derived.
 
 - Lumpy, foreseeable costs (like semester tuition) aren't a special case --
-  they're just a transaction with a non-monthly `cadence`, which dashboards
-  can use to compute smoothed/trailing views instead of raw monthly totals.
+  they're logged as a normal expense on the date paid. The 12-month
+  trailing average in get_trailing_average_expense() is what keeps a
+  single lumpy cost from making one month look catastrophic; the raw
+  monthly total is deliberately left alone since it's accurate.
 
 - Reimbursements are tracked with a lightweight flag + status on the
   original expense, rather than a full receivables ledger. When money
@@ -39,14 +41,6 @@ class TransactionType(str, enum.Enum):
     INCOME = "income"
     EXPENSE = "expense"
     TRANSFER = "transfer"
-
-
-class Cadence(str, enum.Enum):
-    ONE_TIME = "one_time"
-    MONTHLY = "monthly"
-    QUARTERLY = "quarterly"
-    SEMESTERLY = "semesterly"
-    ANNUAL = "annual"
 
 
 class ReimbursementStatus(str, enum.Enum):
@@ -102,7 +96,6 @@ class Transaction(Base):
     category_id: Mapped[int | None] = mapped_column(ForeignKey("categories.id"), nullable=True)
 
     note: Mapped[str | None] = mapped_column(Text, nullable=True)
-    cadence: Mapped[Cadence] = mapped_column(SAEnum(Cadence), default=Cadence.ONE_TIME)
 
     reimbursable: Mapped[bool] = mapped_column(Boolean, default=False)
     reimbursement_status: Mapped[ReimbursementStatus | None] = mapped_column(
