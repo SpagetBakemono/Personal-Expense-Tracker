@@ -64,6 +64,11 @@ body {
 
 .stat-label {
   font-size: 12px;
+  line-height: 1.4;
+  /* Reserves 2 lines' height always, so a label that wraps (e.g. "6-mo
+     avg monthly spend") doesn't push its value out of line with cards
+     whose label fits on one line. */
+  min-height: 2.8em;
   text-transform: uppercase;
   letter-spacing: 0.04em;
   color: var(--muted);
