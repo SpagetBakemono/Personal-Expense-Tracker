@@ -19,11 +19,26 @@ from app.models import (
     Account,
     AccountType,
     Category,
-    Cadence,
+    CategoryKind,
     ReimbursementStatus,
     Transaction,
     TransactionType,
 )
+
+# Dataviz-skill validated 8-hue categorical palette (light mode), adjacent-pair
+# order -- see app/static/style.css's palette note. Used only for the
+# multi-category trend chart; the single-category highlight view keeps its
+# existing accent/gray 2-color scheme.
+CATEGORY_COLOR_SLOTS = [
+    "#2a78d6",  # blue
+    "#eb6834",  # orange
+    "#1baf7a",  # aqua
+    "#eda100",  # yellow
+    "#e87ba4",  # magenta
+    "#008300",  # green
+    "#4a3aa7",  # violet
+    "#e34948",  # red -- reserved for the "Other" fold-bucket, below
+]
 
 
 def get_account_balance(db: Session, account: Account) -> Decimal:
@@ -97,6 +112,140 @@ def get_month_summary(db: Session, year: int, month: int) -> dict:
         "by_category": dict(sorted(by_category.items(), key=lambda kv: -kv[1])),
         "transactions": sorted(txns, key=lambda t: t.date, reverse=True),
     }
+
+
+def get_monthly_category_trend(
+    db: Session, category_id: int | None, start: date, months: int
+) -> list[dict]:
+    """Monthly expense totals for `months` consecutive months starting at
+    `start` (the 1st of a month), split into `highlighted` (the given
+    category) and `other` (everything else) -- so a lumpy, infrequent cost
+    like tuition can be visually called out against regular spending
+    instead of just inflating the month's bar."""
+    end = start + relativedelta(months=months)
+    txns = db.scalars(
+        select(Transaction).where(
+            Transaction.date >= start,
+            Transaction.date < end,
+            Transaction.type == TransactionType.EXPENSE,
+        )
+    ).all()
+
+    buckets = {}
+    for i in range(months):
+        m = start + relativedelta(months=i)
+        buckets[(m.year, m.month)] = {"highlighted": Decimal(0), "other": Decimal(0)}
+
+    for t in txns:
+        key = (t.date.year, t.date.month)
+        if key not in buckets:
+            continue
+        if category_id is not None and t.category_id == category_id:
+            buckets[key]["highlighted"] += t.amount
+        else:
+            buckets[key]["other"] += t.amount
+
+    result = []
+    for i in range(months):
+        m = start + relativedelta(months=i)
+        b = buckets[(m.year, m.month)]
+        result.append(
+            {
+                "month_label": m.strftime("%b %Y"),
+                "highlighted": b["highlighted"],
+                "other": b["other"],
+                "total": b["highlighted"] + b["other"],
+            }
+        )
+    return result
+
+
+def get_category_color_series(db: Session) -> list[dict]:
+    """Fixed {label, color, category_ids} assignment for the multi-category
+    trend chart: the first 7 expense categories (by id, i.e. creation order)
+    get a dedicated hue from the validated 8-hue categorical palette; every
+    other expense category folds into a shared "Other" bucket on the 8th
+    hue. Fixed by category id, never by how much each spent, so a
+    category's color never changes when the visible time range does."""
+    categories = db.scalars(
+        select(Category).where(Category.kind == CategoryKind.EXPENSE).order_by(Category.id)
+    ).all()
+
+    series = [
+        {"label": c.name, "color": CATEGORY_COLOR_SLOTS[i], "category_ids": {c.id}}
+        for i, c in enumerate(categories[:7])
+    ]
+    if len(categories) > 7:
+        series.append(
+            {
+                "label": "Other",
+                "color": CATEGORY_COLOR_SLOTS[7],
+                "category_ids": {c.id for c in categories[7:]},
+            }
+        )
+    return series
+
+
+def get_monthly_all_categories_trend(db: Session, start: date, months: int) -> list[dict]:
+    """Per-month expense totals broken out by category (see
+    get_category_color_series), for the "All categories" trend view --
+    every dollar is attributed to its actual category's color instead of
+    being lumped into one undifferentiated total."""
+    end = start + relativedelta(months=months)
+    series = get_category_color_series(db)
+    series_index_by_category_id = {
+        cid: idx for idx, s in enumerate(series) for cid in s["category_ids"]
+    }
+
+    txns = db.scalars(
+        select(Transaction).where(
+            Transaction.date >= start,
+            Transaction.date < end,
+            Transaction.type == TransactionType.EXPENSE,
+        )
+    ).all()
+
+    buckets = {}
+    for i in range(months):
+        m = start + relativedelta(months=i)
+        buckets[(m.year, m.month)] = [Decimal(0)] * len(series)
+
+    for t in txns:
+        key = (t.date.year, t.date.month)
+        if key not in buckets:
+            continue
+        idx = series_index_by_category_id.get(t.category_id)
+        if idx is None:
+            continue
+        buckets[key][idx] += t.amount
+
+    # Only series with spend somewhere in the range get a segment/legend
+    # entry -- keeps an idle category from cluttering the chart -- but
+    # which slot/color each one gets is fixed above, not recomputed here.
+    active = [i for i in range(len(series)) if any(buckets[k][i] > 0 for k in buckets)]
+
+    result = []
+    for i in range(months):
+        m = start + relativedelta(months=i)
+        b = buckets[(m.year, m.month)]
+        top = next((idx for idx in reversed(active) if b[idx] > 0), None)
+        segments = [
+            {
+                "label": series[idx]["label"],
+                "color": series[idx]["color"],
+                "amount": b[idx],
+                "rounded_top": idx == top,
+            }
+            for idx in active
+        ]
+        result.append(
+            {
+                "month_label": m.strftime("%b %Y"),
+                "segments": segments,
+                "total": sum(b, Decimal(0)),
+            }
+        )
+    return result
 
 
 def get_trailing_average_expense(db: Session, months: int = 12) -> tuple[Decimal, int]:

@@ -2,7 +2,7 @@ from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from app.database import Base, SessionLocal, engine
-from app.routers import accounts, dashboard, transactions
+from app.routers import accounts, dashboard, transactions, trends
 from app.services import seed_default_categories
 
 app = FastAPI(title="Expense Tracker")
@@ -12,6 +12,7 @@ app.mount("/static", StaticFiles(directory="app/static"), name="static")
 app.include_router(dashboard.router)
 app.include_router(accounts.router)
 app.include_router(transactions.router)
+app.include_router(trends.router)
 
 
 @app.on_event("startup")

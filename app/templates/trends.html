@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Trends{% endblock %}
+{% block content %}
+
+<h2>Spending trend</h2>
+
+<form class="filter-row" method="get" action="/trends">
+  <div>
+    <label for="category_id">Highlight category</label>
+    <select id="category_id" name="category_id" onchange="this.form.submit()">
+      <option value="" {{ "selected" if selected_category_id is none else "" }}>All categories</option>
+      {% for c in categories %}
+      <option value="{{ c.id }}" {{ "selected" if c.id == selected_category_id else "" }}>{{ c.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label for="start">From</label>
+    <input type="month" id="start" name="start" value="{{ start_value }}" onchange="this.form.submit()" />
+  </div>
+  <div>
+    <label for="end">To</label>
+    <input type="month" id="end" name="end" value="{{ end_value }}" onchange="this.form.submit()" />
+  </div>
+  <noscript><button type="submit">Update</button></noscript>
+</form>
+
+{% if not categories %}
+<p class="empty">No expense categories yet.</p>
+
+{% elif selected_category %}
+<!-- Single category highlighted against everything else -->
+<div class="card trend-card">
+  <div class="trend-legend">
+    <div class="trend-legend-item"><span class="trend-swatch other"></span> Other spending</div>
+    <div class="trend-legend-item"><span class="trend-swatch highlighted"></span> {{ selected_category.name }}</div>
+  </div>
+
+  <div class="trend-chart">
+    {% for d in data %}
+    <div class="trend-col">
+      <div class="trend-total">${{ "%.0f"|format(d.total) }}</div>
+      <div class="trend-bar-track" style="height: {{ 150 if max_total > 0 else 0 }}px;">
+        <div class="trend-seg other {{ 'rounded-top' if d.highlighted == 0 and d.other > 0 else '' }}"
+             style="height: {{ (d.other / max_total * 150) if max_total > 0 else 0 }}px;"
+             title="Other spending: ${{ '%.2f'|format(d.other) }}"></div>
+        <div class="trend-seg highlighted {{ 'rounded-top' if d.highlighted > 0 else '' }}"
+             style="height: {{ (d.highlighted / max_total * 150) if max_total > 0 else 0 }}px;"
+             title="{{ selected_category.name }}: ${{ '%.2f'|format(d.highlighted) }}"></div>
+      </div>
+      <div class="trend-month-label">{{ d.month_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<table class="trend-table">
+  <caption>Same data, as a table</caption>
+  <thead><tr><th>Month</th><th>{{ selected_category.name }}</th><th>Other</th><th>Total</th></tr></thead>
+  <tbody>
+    {% for d in data %}
+    <tr>
+      <td>{{ d.month_label }}</td>
+      <td>${{ "%.2f"|format(d.highlighted) }}</td>
+      <td>${{ "%.2f"|format(d.other) }}</td>
+      <td>${{ "%.2f"|format(d.total) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% elif not legend %}
+<p class="empty">No expenses logged yet.</p>
+
+{% else %}
+<!-- All categories: every dollar attributed to its actual category -->
+<div class="card trend-card">
+  <div class="trend-legend">
+    {% for item in legend %}
+    <div class="trend-legend-item"><span class="trend-swatch" style="background: {{ item.color }};"></span> {{ item.label }}</div>
+    {% endfor %}
+  </div>
+
+  <div class="trend-chart">
+    {% for d in data %}
+    <div class="trend-col">
+      <div class="trend-total">${{ "%.0f"|format(d.total) }}</div>
+      <div class="trend-bar-track" style="height: {{ 150 if max_total > 0 else 0 }}px;">
+        {% for seg in d.segments %}
+        <div class="trend-seg {{ 'rounded-top' if seg.rounded_top else '' }}"
+             style="height: {{ (seg.amount / max_total * 150) if max_total > 0 else 0 }}px; background: {{ seg.color }};"
+             title="{{ seg.label }}: ${{ '%.2f'|format(seg.amount) }}"></div>
+        {% endfor %}
+      </div>
+      <div class="trend-month-label">{{ d.month_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<table class="trend-table">
+  <caption>Same data, as a table</caption>
+  <thead>
+    <tr>
+      <th>Month</th>
+      {% for item in legend %}<th>{{ item.label }}</th>{% endfor %}
+      <th>Total</th>
+    </tr>
+  </thead>
+  <tbody>
+    {% for d in data %}
+    <tr>
+      <td>{{ d.month_label }}</td>
+      {% for seg in d.segments %}<td>${{ "%.2f"|format(seg.amount) }}</td>{% endfor %}
+      <td>${{ "%.2f"|format(d.total) }}</td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+
+{% endif %}
+{% endblock %}
