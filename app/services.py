@@ -310,6 +310,7 @@ DEFAULT_EXPENSE_CATEGORIES = [
     "Health",
     "Shopping",
     "Entertainment",
+    "Travel",
     "Other",
 ]
 DEFAULT_INCOME_CATEGORIES = [
