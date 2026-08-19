@@ -8,7 +8,11 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Category, CategoryKind, Transaction, TransactionType
-from app.services import get_monthly_all_categories_trend, get_monthly_category_trend
+from app.services import (
+    get_category_color_series,
+    get_monthly_all_categories_trend,
+    get_monthly_single_category_trend,
+)
 from app.templating import templates
 
 router = APIRouter()
@@ -70,11 +74,36 @@ def trends(
         months = MAX_MONTHS
 
     if selected_category_id is not None:
-        data = get_monthly_category_trend(db, selected_category_id, start_month, months)
+        # Isolated: just this category's own trend, no comparison against
+        # everything else -- shares the same {month_label, segments,
+        # total} shape as the all-categories view below so the template
+        # doesn't need two different chart-rendering branches.
+        raw = get_monthly_single_category_trend(db, selected_category_id, start_month, months)
+        color_series = get_category_color_series(db)
+        color = next(
+            (s["color"] for s in color_series if selected_category_id in s["category_ids"]),
+            "#256abf",
+        )
+        data = [
+            {
+                "month_label": d["month_label"],
+                "segments": [
+                    {
+                        "label": selected_category.name,
+                        "color": color,
+                        "amount": d["amount"],
+                        "rounded_top": True,
+                    }
+                ],
+                "by_label": {selected_category.name: d["amount"]},
+                "total": d["amount"],
+            }
+            for d in raw
+        ]
+        legend = [{"label": selected_category.name, "color": color}] if data else []
     else:
-        data = get_monthly_all_categories_trend(db, start_month, months)
+        data, legend = get_monthly_all_categories_trend(db, start_month, months)
     max_total = max((d["total"] for d in data), default=Decimal(0))
-    legend = data[0]["segments"] if (data and selected_category_id is None) else []
 
     return templates.TemplateResponse(
         request,

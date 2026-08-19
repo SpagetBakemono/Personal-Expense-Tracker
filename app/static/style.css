@@ -161,11 +161,10 @@ button:hover { opacity: 0.9; }
   color: var(--muted);
 }
 
-/* Trends: 2-series stacked bars-over-time (highlighted category vs. the
-   rest). "Other" keeps the app's single accent hue; the highlighted
-   category is intentionally neutral gray (--secondary) rather than a
-   second identity hue -- the point is to visually de-emphasize a lumpy,
-   infrequent cost, not compete with it for attention. */
+/* Trends: stacked bars-over-time, 1 to 8 segments depending on view
+   (one isolated category, or every category broken out) -- colors are
+   assigned per category in get_category_color_series() in services.py,
+   not here. */
 .filter-row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
 .filter-row > div { min-width: 160px; }
 .filter-row label { margin-bottom: 4px; }
@@ -175,8 +174,6 @@ button:hover { opacity: 0.9; }
 .trend-legend { display: flex; gap: 18px; margin-bottom: 16px; font-size: 13px; color: var(--secondary); }
 .trend-legend-item { display: flex; align-items: center; gap: 6px; }
 .trend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
-.trend-swatch.other { background: var(--accent); }
-.trend-swatch.highlighted { background: var(--secondary); }
 
 .trend-chart {
   display: flex;
@@ -192,11 +189,8 @@ button:hover { opacity: 0.9; }
 .trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; justify-content: flex-end; }
 .trend-total { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; margin-bottom: 6px; white-space: nowrap; }
 /* gap (not margin) so the 2px surface separator works the same whether
-   there are 2 stacked segments (highlight view) or up to 8 (all-categories
-   view) -- see get_category_color_series() in services.py for the palette. */
+   there's 1 segment (isolated category) or up to 8 (all-categories view). */
 .trend-bar-track { width: 22px; display: flex; flex-direction: column-reverse; gap: 2px; }
-.trend-seg.other { background: var(--accent); }
-.trend-seg.highlighted { background: var(--secondary); }
 .trend-seg.rounded-top { border-radius: 4px 4px 0 0; }
 .trend-month-label { font-size: 11px; color: var(--muted); margin-top: 8px; white-space: nowrap; }
 

@@ -139,49 +139,37 @@ def get_month_summary(
     }
 
 
-def get_monthly_category_trend(
-    db: Session, category_id: int | None, start: date, months: int
+def get_monthly_single_category_trend(
+    db: Session, category_id: int, start: date, months: int
 ) -> list[dict]:
-    """Monthly expense totals for `months` consecutive months starting at
-    `start` (the 1st of a month), split into `highlighted` (the given
-    category) and `other` (everything else) -- so a lumpy, infrequent cost
-    like tuition can be visually called out against regular spending
-    instead of just inflating the month's bar."""
+    """Monthly expense totals for a single category, isolated -- no
+    comparison against other spending. For drilling into one category's
+    trend on its own (see get_monthly_all_categories_trend for the
+    everything-broken-out view instead)."""
     end = start + relativedelta(months=months)
     txns = db.scalars(
         select(Transaction).where(
             Transaction.date >= start,
             Transaction.date < end,
             Transaction.type == TransactionType.EXPENSE,
+            Transaction.category_id == category_id,
         )
     ).all()
 
     buckets = {}
     for i in range(months):
         m = start + relativedelta(months=i)
-        buckets[(m.year, m.month)] = {"highlighted": Decimal(0), "other": Decimal(0)}
+        buckets[(m.year, m.month)] = Decimal(0)
 
     for t in txns:
         key = (t.date.year, t.date.month)
-        if key not in buckets:
-            continue
-        if category_id is not None and t.category_id == category_id:
-            buckets[key]["highlighted"] += t.amount
-        else:
-            buckets[key]["other"] += t.amount
+        if key in buckets:
+            buckets[key] += t.amount
 
     result = []
     for i in range(months):
         m = start + relativedelta(months=i)
-        b = buckets[(m.year, m.month)]
-        result.append(
-            {
-                "month_label": m.strftime("%b %Y"),
-                "highlighted": b["highlighted"],
-                "other": b["other"],
-                "total": b["highlighted"] + b["other"],
-            }
-        )
+        result.append({"month_label": m.strftime("%b %Y"), "amount": buckets[(m.year, m.month)]})
     return result
 
 
@@ -211,11 +199,17 @@ def get_category_color_series(db: Session) -> list[dict]:
     return series
 
 
-def get_monthly_all_categories_trend(db: Session, start: date, months: int) -> list[dict]:
+def get_monthly_all_categories_trend(
+    db: Session, start: date, months: int
+) -> tuple[list[dict], list[dict]]:
     """Per-month expense totals broken out by category (see
     get_category_color_series), for the "All categories" trend view --
     every dollar is attributed to its actual category's color instead of
-    being lumped into one undifferentiated total."""
+    being lumped into one undifferentiated total. Returns (data, legend):
+    legend is in a fixed category order for consistent labeling; each
+    month's own segments are ordered by that month's amounts instead
+    (largest at the bottom of the stack), which the legend deliberately
+    does not follow -- legend order should stay put while values change."""
     end = start + relativedelta(months=months)
     series = get_category_color_series(db)
     series_index_by_category_id = {
@@ -244,33 +238,42 @@ def get_monthly_all_categories_trend(db: Session, start: date, months: int) -> l
             continue
         buckets[key][idx] += t.amount
 
-    # Only series with spend somewhere in the range get a segment/legend
-    # entry -- keeps an idle category from cluttering the chart -- but
-    # which slot/color each one gets is fixed above, not recomputed here.
+    # Only series with spend somewhere in the range get a legend entry --
+    # keeps an idle category from cluttering the chart -- but which
+    # slot/color each one gets is fixed above and stays fixed here; this
+    # order is for the *legend* only, not how a given month's bar stacks.
     active = [i for i in range(len(series)) if any(buckets[k][i] > 0 for k in buckets)]
+    legend = [{"label": series[i]["label"], "color": series[i]["color"]} for i in active]
 
     result = []
     for i in range(months):
         m = start + relativedelta(months=i)
         b = buckets[(m.year, m.month)]
-        top = next((idx for idx in reversed(active) if b[idx] > 0), None)
+        # Largest amount at the bottom of the stack, smallest at the top --
+        # per-month, independent of the legend's fixed order, since the
+        # point here is "what dominated this month," not identity order.
+        month_order = sorted((idx for idx in active if b[idx] > 0), key=lambda idx: -b[idx])
         segments = [
             {
                 "label": series[idx]["label"],
                 "color": series[idx]["color"],
                 "amount": b[idx],
-                "rounded_top": idx == top,
+                "rounded_top": idx == month_order[-1] if month_order else False,
             }
-            for idx in active
+            for idx in month_order
         ]
         result.append(
             {
                 "month_label": m.strftime("%b %Y"),
                 "segments": segments,
+                # Stable, legend-order lookup for the table view -- unlike
+                # `segments` above, a table's columns can't reorder row to
+                # row and still be readable.
+                "by_label": {series[idx]["label"]: b[idx] for idx in active},
                 "total": sum(b, Decimal(0)),
             }
         )
-    return result
+    return result, legend
 
 
 def _trailing_average(
