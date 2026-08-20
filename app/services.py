@@ -8,8 +8,8 @@ is fast enough, and it avoids an entire class of bugs where a stored
 balance drifts out of sync after an edit or delete.
 """
 from collections import defaultdict
-from datetime import date
-from decimal import Decimal
+from datetime import date, timedelta
+from decimal import Decimal, InvalidOperation
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, or_, select
@@ -20,6 +20,7 @@ from app.models import (
     AccountType,
     Category,
     CategoryKind,
+    PendingImport,
     ReimbursementStatus,
     Transaction,
     TransactionType,
@@ -350,6 +351,74 @@ def get_pending_reimbursements(db: Session, account_id: int | None = None) -> li
     if account_id is not None:
         query = query.where(Transaction.account_id == account_id)
     return db.scalars(query).all()
+
+
+DUPLICATE_DATE_TOLERANCE_DAYS = 1
+
+
+def _looks_like_duplicate(db: Session, account_id: int, txn_date: date, amount: Decimal) -> bool:
+    """A pending/posted date can shift by a day between when you logged
+    something by hand and when the bank's statement settles it -- exact
+    date matching would miss real duplicates, so this allows a 1-day
+    window either side."""
+    window_start = txn_date - timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
+    window_end = txn_date + timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
+    existing = db.scalar(
+        select(Transaction.id).where(
+            Transaction.account_id == account_id,
+            Transaction.amount == amount,
+            Transaction.date >= window_start,
+            Transaction.date <= window_end,
+        )
+    )
+    return existing is not None
+
+
+def create_pending_imports(
+    db: Session, account_id: int, parsed: list[dict]
+) -> list[PendingImport]:
+    """Turns parsed {date, amount, merchant, type} dicts (see
+    app/import_parser.py) into PendingImport rows for the review queue,
+    flagging ones that look like they might already be logged by hand.
+    Tolerant of a parsed row being malformed (bad date/amount/type) --
+    skips just that row rather than failing the whole batch, since one bad
+    line out of dozens shouldn't block importing the rest."""
+    created = []
+    for row in parsed:
+        try:
+            txn_date = date.fromisoformat(row["date"]) if row.get("date") else date.today()
+            amount = Decimal(str(row["amount"]))
+            merchant = (row.get("merchant") or "").strip() or "(unknown)"
+            suggested_type = TransactionType(row.get("type", "expense"))
+        except (KeyError, ValueError, InvalidOperation, TypeError):
+            continue
+
+        pending = PendingImport(
+            date=txn_date,
+            amount=amount,
+            merchant=merchant,
+            suggested_type=suggested_type,
+            account_id=account_id,
+            possible_duplicate=_looks_like_duplicate(db, account_id, txn_date, amount),
+        )
+        db.add(pending)
+        created.append(pending)
+
+    db.commit()
+    return created
+
+
+def get_pending_imports(db: Session) -> list[PendingImport]:
+    return db.scalars(
+        select(PendingImport).order_by(PendingImport.date.desc())
+    ).all()
+
+
+def delete_pending_import(db: Session, pending_id: int) -> None:
+    pending = db.get(PendingImport, pending_id)
+    if pending:
+        db.delete(pending)
+        db.commit()
 
 
 DEFAULT_EXPENSE_CATEGORIES = [

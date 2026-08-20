@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Import statement{% endblock %}
+{% block content %}
+<h2>Import from statement</h2>
+<p class="empty" style="padding: 0 0 16px;">
+  Paste the transaction list from your bank/card's website below. Nothing
+  is saved automatically -- each one lands in a review queue for you to
+  confirm, edit, or discard.
+</p>
+
+{% if not accounts %}
+<p class="empty">You need at least one account first. <a href="/accounts/new">Add one</a>.</p>
+{% else %}
+
+{% if error %}
+<p class="empty" style="color: var(--danger);">{{ error }}</p>
+{% endif %}
+
+<form class="form-card" method="post" action="/import" style="max-width: 640px;">
+  <div>
+    <label for="account_id">Which account is this statement from?</label>
+    <select id="account_id" name="account_id" required>
+      {% for a in accounts %}
+      <option value="{{ a.id }}">{{ a.name }}</option>
+      {% endfor %}
+    </select>
+  </div>
+  <div>
+    <label for="statement_text">Statement text</label>
+    <textarea id="statement_text" name="statement_text" rows="14" required
+              placeholder="Select and copy the transaction list from your bank's site, then paste it here."
+              style="width:100%; padding:8px 10px; border:1px solid var(--border); border-radius:6px; font-size:13px; font-family:inherit;"></textarea>
+  </div>
+  <button type="submit">Parse transactions</button>
+</form>
+
+{% endif %}
+{% endblock %}

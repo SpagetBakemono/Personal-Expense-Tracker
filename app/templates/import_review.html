@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block title %}Review import{% endblock %}
+{% block content %}
+<h2>Review import</h2>
+
+{% if pending %}
+<p class="empty" style="padding: 0 0 16px;">
+  {{ pending|length }} transaction{{ "s" if pending|length != 1 else "" }} parsed, nothing saved yet.
+  <span style="color: var(--danger);">Flagged</span> ones look like they might already be logged --
+  double check before confirming.
+</p>
+<table>
+  <thead><tr><th>Date</th><th>Account</th><th>Merchant</th><th>Type</th><th>Amount</th><th></th><th></th></tr></thead>
+  <tbody>
+    {% for p in pending %}
+    <tr>
+      <td>{{ p.date.isoformat() }}</td>
+      <td>{{ p.account.name }}</td>
+      <td>
+        {{ p.merchant }}
+        {% if p.possible_duplicate %}<br><span class="badge" style="color: var(--danger); border-color: var(--danger);">possible duplicate</span>{% endif %}
+      </td>
+      <td><span class="badge">{{ p.suggested_type.value }}</span></td>
+      <td class="amount {{ 'expense' if p.suggested_type.value == 'expense' else 'income' }}">${{ "%.2f"|format(p.amount) }}</td>
+      <td><a href="/transactions/new?pending_import_id={{ p.id }}">Confirm</a></td>
+      <td>
+        <form method="post" action="/import/{{ p.id }}/discard" style="margin:0;">
+          <button type="submit" style="padding:4px 10px;font-size:12px;background:var(--danger);">Discard</button>
+        </form>
+      </td>
+    </tr>
+    {% endfor %}
+  </tbody>
+</table>
+{% else %}
+<p class="empty">Nothing to review. <a href="/import">Import a statement</a> to get started.</p>
+{% endif %}
+{% endblock %}

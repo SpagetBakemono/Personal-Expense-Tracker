@@ -9,6 +9,7 @@ from app.database import get_db
 from app.models import (
     Account,
     Category,
+    PendingImport,
     ReimbursementStatus,
     Transaction,
     TransactionType,
@@ -19,9 +20,24 @@ router = APIRouter()
 
 
 @router.get("/transactions/new")
-def new_transaction_form(request: Request, db: Session = Depends(get_db)):
+def new_transaction_form(
+    request: Request, pending_import_id: int | None = None, db: Session = Depends(get_db)
+):
     accounts = db.scalars(select(Account).order_by(Account.name)).all()
     categories = db.scalars(select(Category).order_by(Category.name)).all()
+
+    prefill = None
+    if pending_import_id is not None:
+        pending = db.get(PendingImport, pending_import_id)
+        if pending is not None:
+            prefill = {
+                "date": pending.date.isoformat(),
+                "amount": pending.amount,
+                "type": pending.suggested_type.value,
+                "account_id": pending.account_id,
+                "note": pending.merchant,
+            }
+
     return templates.TemplateResponse(
         request,
         "transaction_new.html",
@@ -29,6 +45,8 @@ def new_transaction_form(request: Request, db: Session = Depends(get_db)):
             "accounts": accounts,
             "categories": categories,
             "today": date.today().isoformat(),
+            "prefill": prefill,
+            "pending_import_id": pending_import_id if prefill else None,
         },
     )
 
@@ -44,6 +62,7 @@ def create_transaction(
     note: str = Form(""),
     reimbursable: str = Form(""),
     exclude_from_living: str = Form(""),
+    pending_import_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     txn_type = TransactionType(type)
@@ -63,6 +82,15 @@ def create_transaction(
         txn.reimbursement_status = ReimbursementStatus.PENDING
 
     db.add(txn)
+
+    # Confirming an import candidate: this transaction replaces it, so the
+    # queue entry is done -- delete it in the same commit rather than
+    # leaving it to linger and get confirmed a second time by mistake.
+    if pending_import_id:
+        pending = db.get(PendingImport, int(pending_import_id))
+        if pending:
+            db.delete(pending)
+
     db.commit()
     return RedirectResponse(url="/", status_code=303)
 

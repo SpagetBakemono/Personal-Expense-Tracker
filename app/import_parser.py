@@ -1,6 +1,7 @@
 """
-Statement import parsing -- turns raw pasted bank/card statement text into
-structured transaction candidates using Gemini's free API tier.
+Statement import parsing -- turns raw statement text (pasted by hand, or
+grabbed from a bank page by the browser extension) into structured
+transaction candidates using Gemini's free API tier.
 
 Nothing here touches the database. This is intentionally just text in,
 structured candidates out -- callers decide what happens with the result
@@ -54,6 +55,9 @@ def parse_statement_text(text: str) -> list[dict]:
     if not api_key:
         raise RuntimeError("GEMINI_API_KEY is not set -- check .env")
 
+    # Held in a local variable rather than chained -- letting the Client
+    # get garbage-collected mid-request raised "Cannot send a request, as
+    # the client has been closed".
     client = genai.Client(api_key=api_key)
     response = client.models.generate_content(
         model=MODEL,
