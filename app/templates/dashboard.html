@@ -69,17 +69,38 @@
 </div>
 
 <h2>Spending by category</h2>
-{% if summary.by_category %}
-  {% for name, amount in summary.by_category.items() %}
-  <div class="bar-row">
-    <div class="bar-label">{{ name }}</div>
-    <div class="bar-track"><div class="bar-fill" style="width: {{ (amount / max_category * 100)|round(1) }}%"></div></div>
-    <div class="bar-amount">${{ "%.2f"|format(amount) }}</div>
-  </div>
-  {% endfor %}
-{% else %}
-  <p class="empty">No expenses logged this month yet.</p>
-{% endif %}
+
+<input type="radio" name="dash_scope" id="dash_scope_all" class="toggle-input" checked>
+<label for="dash_scope_all" class="toggle-btn">All</label>
+<input type="radio" name="dash_scope" id="dash_scope_living" class="toggle-input">
+<label for="dash_scope_living" class="toggle-btn">Living</label>
+
+<div class="toggle-panel" data-for="dash_scope_all">
+  {% if summary.by_category %}
+    {% for name, amount in summary.by_category.items() %}
+    <div class="bar-row">
+      <div class="bar-label">{{ name }}</div>
+      <div class="bar-track"><div class="bar-fill" style="width: {{ (amount / max_category * 100)|round(1) }}%"></div></div>
+      <div class="bar-amount">${{ "%.2f"|format(amount) }}</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">No expenses logged this month yet.</p>
+  {% endif %}
+</div>
+<div class="toggle-panel" data-for="dash_scope_living">
+  {% if summary.by_category_living %}
+    {% for name, amount in summary.by_category_living.items() %}
+    <div class="bar-row">
+      <div class="bar-label">{{ name }}</div>
+      <div class="bar-track"><div class="bar-fill" style="width: {{ (amount / max_category_living * 100)|round(1) }}%"></div></div>
+      <div class="bar-amount">${{ "%.2f"|format(amount) }}</div>
+    </div>
+    {% endfor %}
+  {% else %}
+    <p class="empty">No living expenses logged this month yet.</p>
+  {% endif %}
+</div>
 
 <h2>Accounts</h2>
 {% if balances %}
@@ -103,16 +124,16 @@
 {% if pending %}
 <h2>Pending reimbursements</h2>
 <table>
-  <thead><tr><th>Date</th><th>Note</th><th>Amount</th><th></th></tr></thead>
+  <thead><tr><th>Date</th><th>Note</th><th>Amount</th><th class="actions-col"></th></tr></thead>
   <tbody>
     {% for t in pending %}
     <tr>
       <td>{{ t.date.isoformat() }}</td>
       <td>{{ t.note or (t.category.name if t.category else '') }}</td>
       <td class="amount expense">${{ "%.2f"|format(t.amount) }}</td>
-      <td>
-        <form method="post" action="/transactions/{{ t.id }}/mark-reimbursed" style="margin:0;">
-          <button type="submit" style="padding:4px 10px;font-size:12px;">Mark received</button>
+      <td class="actions-col">
+        <form method="post" action="/transactions/{{ t.id }}/mark-reimbursed" style="margin:0;display:inline;">
+          <button type="submit" class="btn-sm btn-sm-accent">Mark received</button>
         </form>
       </td>
     </tr>
@@ -124,7 +145,7 @@
 <h2>Recent transactions</h2>
 {% if summary.transactions %}
 <table>
-  <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Note</th><th>Amount</th><th></th></tr></thead>
+  <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Note</th><th>Amount</th><th class="actions-col"></th></tr></thead>
   <tbody>
     {% for t in summary.transactions[:15] %}
     <tr>
@@ -133,7 +154,7 @@
       <td>{{ t.category.name if t.category else '—' }}</td>
       <td>{{ t.note or '' }}</td>
       <td class="amount {{ 'expense' if t.type.value == 'expense' else 'income' }}">${{ "%.2f"|format(t.amount) }}</td>
-      <td><a href="/transactions/{{ t.id }}/edit">Edit</a></td>
+      <td class="actions-col"><a href="/transactions/{{ t.id }}/edit" class="btn-sm btn-sm-outline">Edit</a></td>
     </tr>
     {% endfor %}
   </tbody>

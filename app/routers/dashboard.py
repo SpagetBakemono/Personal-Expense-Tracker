@@ -51,6 +51,9 @@ def dashboard(
     pending = get_pending_reimbursements(db, effective_account_id)
 
     max_category = max(summary["by_category"].values()) if summary["by_category"] else 1
+    max_category_living = (
+        max(summary["by_category_living"].values()) if summary["by_category_living"] else 1
+    )
 
     return templates.TemplateResponse(
         request,
@@ -69,6 +72,7 @@ def dashboard(
             "income_avg_months": income_avg_months,
             "pending": pending,
             "max_category": max_category,
+            "max_category_living": max_category_living,
             "month_name": today.strftime("%B %Y"),
         },
     )

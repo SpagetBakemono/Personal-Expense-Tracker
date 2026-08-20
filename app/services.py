@@ -124,9 +124,12 @@ def get_month_summary(
     )
 
     by_category: dict[str, Decimal] = defaultdict(lambda: Decimal(0))
+    by_category_living: dict[str, Decimal] = defaultdict(lambda: Decimal(0))
     for t in txns:
         if t.type == TransactionType.EXPENSE and t.category:
             by_category[t.category.name] += t.amount
+            if not t.exclude_from_living:
+                by_category_living[t.category.name] += t.amount
 
     return {
         "start": start,
@@ -136,26 +139,28 @@ def get_month_summary(
         "net": income - expenses,
         "living_net": income - living_expenses,
         "by_category": dict(sorted(by_category.items(), key=lambda kv: -kv[1])),
+        "by_category_living": dict(sorted(by_category_living.items(), key=lambda kv: -kv[1])),
         "transactions": sorted(txns, key=lambda t: t.date, reverse=True),
     }
 
 
 def get_monthly_single_category_trend(
-    db: Session, category_id: int, start: date, months: int
+    db: Session, category_id: int, start: date, months: int, living_only: bool = False
 ) -> list[dict]:
     """Monthly expense totals for a single category, isolated -- no
     comparison against other spending. For drilling into one category's
     trend on its own (see get_monthly_all_categories_trend for the
     everything-broken-out view instead)."""
     end = start + relativedelta(months=months)
-    txns = db.scalars(
-        select(Transaction).where(
-            Transaction.date >= start,
-            Transaction.date < end,
-            Transaction.type == TransactionType.EXPENSE,
-            Transaction.category_id == category_id,
-        )
-    ).all()
+    query = select(Transaction).where(
+        Transaction.date >= start,
+        Transaction.date < end,
+        Transaction.type == TransactionType.EXPENSE,
+        Transaction.category_id == category_id,
+    )
+    if living_only:
+        query = query.where(Transaction.exclude_from_living == False)  # noqa: E712
+    txns = db.scalars(query).all()
 
     buckets = {}
     for i in range(months):
@@ -201,7 +206,7 @@ def get_category_color_series(db: Session) -> list[dict]:
 
 
 def get_monthly_all_categories_trend(
-    db: Session, start: date, months: int
+    db: Session, start: date, months: int, living_only: bool = False
 ) -> tuple[list[dict], list[dict]]:
     """Per-month expense totals broken out by category (see
     get_category_color_series), for the "All categories" trend view --
@@ -217,13 +222,14 @@ def get_monthly_all_categories_trend(
         cid: idx for idx, s in enumerate(series) for cid in s["category_ids"]
     }
 
-    txns = db.scalars(
-        select(Transaction).where(
-            Transaction.date >= start,
-            Transaction.date < end,
-            Transaction.type == TransactionType.EXPENSE,
-        )
-    ).all()
+    query = select(Transaction).where(
+        Transaction.date >= start,
+        Transaction.date < end,
+        Transaction.type == TransactionType.EXPENSE,
+    )
+    if living_only:
+        query = query.where(Transaction.exclude_from_living == False)  # noqa: E712
+    txns = db.scalars(query).all()
 
     buckets = {}
     for i in range(months):
@@ -275,6 +281,92 @@ def get_monthly_all_categories_trend(
             }
         )
     return result, legend
+
+
+MAX_BALANCE_POINTS = 120
+
+
+def _balance_history_boundaries(start: date, end: date, granularity: str) -> list[date]:
+    """One date per point on the balance-over-time chart -- the *last* day
+    included in that point's bucket (a month's boundary is its last day,
+    not its first, so "Aug 2026" means the balance as of Aug 31). Capped
+    at MAX_BALANCE_POINTS by keeping only the most recent points -- a
+    multi-year daily range would otherwise render hundreds of unreadable
+    points."""
+    end_of_range = (end + relativedelta(months=1)) - timedelta(days=1)
+
+    if granularity == "month":
+        months = (end.year - start.year) * 12 + (end.month - start.month) + 1
+        boundaries = [
+            (start + relativedelta(months=i + 1)) - timedelta(days=1) for i in range(months)
+        ]
+    elif granularity == "week":
+        boundaries = []
+        d = start
+        while d <= end_of_range:
+            boundaries.append(d)
+            d += timedelta(days=7)
+        if not boundaries or boundaries[-1] != end_of_range:
+            boundaries.append(end_of_range)
+    else:  # day
+        boundaries = []
+        d = start
+        while d <= end_of_range:
+            boundaries.append(d)
+            d += timedelta(days=1)
+
+    return boundaries[-MAX_BALANCE_POINTS:]
+
+
+def get_balance_history(
+    db: Session, start: date, end: date, granularity: str = "month"
+) -> list[dict]:
+    """Total balance (across every account, credit cards as liabilities --
+    same convention as get_total_balance) sampled at each period boundary
+    in [start, end]. Walks the transaction log once in date order,
+    applying each transaction's effect to a running per-account balance
+    and sampling the total whenever a boundary is crossed, rather than
+    recomputing get_account_balance from scratch at every point. Fetches
+    every transaction up to the cutoff (not just ones after `start`) so
+    the running balance is correct even when the chart's visible range is
+    capped -- see _balance_history_boundaries."""
+    accounts = db.scalars(select(Account)).all()
+    balance = {a.id: a.opening_balance for a in accounts}
+    is_liability = {a.id: a.type == AccountType.CREDIT_CARD for a in accounts}
+
+    boundaries = _balance_history_boundaries(start, end, granularity)
+    if not boundaries:
+        return []
+
+    txns = db.scalars(
+        select(Transaction).where(Transaction.date <= boundaries[-1]).order_by(Transaction.date)
+    ).all()
+
+    def total_balance() -> Decimal:
+        total = Decimal(0)
+        for account_id, b in balance.items():
+            total += -b if is_liability[account_id] else b
+        return total
+
+    points = []
+    txn_idx = 0
+    for boundary in boundaries:
+        while txn_idx < len(txns) and txns[txn_idx].date <= boundary:
+            t = txns[txn_idx]
+            if t.type == TransactionType.INCOME:
+                balance[t.account_id] += -t.amount if is_liability[t.account_id] else t.amount
+            elif t.type == TransactionType.EXPENSE:
+                balance[t.account_id] += t.amount if is_liability[t.account_id] else -t.amount
+            elif t.type == TransactionType.TRANSFER:
+                balance[t.account_id] += t.amount if is_liability[t.account_id] else -t.amount
+                if t.to_account_id is not None:
+                    balance[t.to_account_id] += (
+                        -t.amount if is_liability[t.to_account_id] else t.amount
+                    )
+            txn_idx += 1
+        points.append({"date": boundary, "balance": total_balance()})
+
+    return points
 
 
 def _trailing_average(
