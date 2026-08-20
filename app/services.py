@@ -77,6 +77,30 @@ def get_account_balance(db: Session, account: Account) -> Decimal:
     return balance
 
 
+def get_projected_balance(
+    db: Session, account: Account, candidates: list[PendingImport]
+) -> Decimal:
+    """Current confirmed balance plus the effect of not-yet-confirmed
+    import candidates that don't look like duplicates -- lets a caller
+    cross-check a bank-stated ending balance against what the app would
+    show if this batch were accepted as-is, before the user confirms
+    anything. Candidates never carry type TRANSFER (the statement parser
+    only ever emits expense/income), so this doesn't need the to_account
+    handling get_account_balance does."""
+    balance = get_account_balance(db, account)
+    is_liability = account.type == AccountType.CREDIT_CARD
+
+    for c in candidates:
+        if c.possible_duplicate:
+            continue
+        if c.suggested_type == TransactionType.INCOME:
+            balance += -c.amount if is_liability else c.amount
+        elif c.suggested_type == TransactionType.EXPENSE:
+            balance += c.amount if is_liability else -c.amount
+
+    return balance
+
+
 def get_all_balances(db: Session) -> list[tuple[Account, Decimal]]:
     accounts = db.scalars(select(Account).order_by(Account.id)).all()
     return [(a, get_account_balance(db, a)) for a in accounts]

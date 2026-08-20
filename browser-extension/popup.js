@@ -69,10 +69,23 @@ async function captureAndSend() {
       throw new Error(data.error || `HTTP ${res.status}`);
     }
 
-    setStatusHtml(
+    let html =
       `Found ${data.count} transaction${data.count === 1 ? "" : "s"}. ` +
-      `<a href="${APP_URL}/import/review" target="_blank">Review them &rarr;</a>`
-    );
+      `<a href="${APP_URL}/import/review" target="_blank">Review them &rarr;</a>`;
+
+    if (typeof data.bank_balance === "number") {
+      const fmt = (n) => `$${n.toFixed(2)}`;
+      if (data.balance_matches) {
+        html += `<div class="balance-check ok">&check; Balance matches: ${fmt(data.bank_balance)}</div>`;
+      } else {
+        html +=
+          `<div class="balance-check mismatch">&#9888; Bank says ${fmt(data.bank_balance)}, ` +
+          `app projects ${fmt(data.app_balance)} (off by ${fmt(Math.abs(data.difference))}) -- ` +
+          `something may be missing or duplicated.</div>`;
+      }
+    }
+
+    setStatusHtml(html);
   } catch (err) {
     setStatus(`Couldn't do that: ${err.message}`, true);
   } finally {
