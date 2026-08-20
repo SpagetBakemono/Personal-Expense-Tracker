@@ -1,0 +1,47 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8" />
+<style>
+  body {
+    width: 280px;
+    margin: 0;
+    padding: 14px;
+    font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    color: #0b0b0b;
+    background: #f9f9f7;
+  }
+  h1 { font-size: 14px; margin: 0 0 12px; }
+  label { display: block; font-size: 12px; color: #898781; margin-bottom: 4px; }
+  select, button {
+    width: 100%;
+    padding: 8px 10px;
+    border: 1px solid #e1e0d9;
+    border-radius: 6px;
+    font-size: 13px;
+    font-family: inherit;
+    box-sizing: border-box;
+  }
+  select { margin-bottom: 10px; background: white; }
+  button {
+    background: #256abf;
+    color: white;
+    border: none;
+    cursor: pointer;
+    font-weight: 600;
+  }
+  button:disabled { opacity: 0.6; cursor: default; }
+  #status { margin-top: 10px; font-size: 12px; color: #52514e; line-height: 1.5; }
+  #status a { color: #256abf; }
+  #status.error { color: #d03b3b; }
+</style>
+</head>
+<body>
+  <h1>Capture statement</h1>
+  <label for="account">Which account is this?</label>
+  <select id="account"></select>
+  <button id="capture">Capture this page</button>
+  <div id="status"></div>
+  <script src="popup.js"></script>
+</body>
+</html>
