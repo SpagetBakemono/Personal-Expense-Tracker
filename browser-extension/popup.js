@@ -37,6 +37,25 @@ async function loadAccounts() {
   }
 }
 
+async function openOrFocusReviewTab() {
+  const reviewUrl = `${APP_URL}/import/review`;
+  // host_permissions already covers APP_URL, which is what lets the url
+  // filter here work without asking for the much broader "tabs"
+  // permission (see manifest.json).
+  const existing = await chrome.tabs.query({ url: `${APP_URL}/*` });
+
+  if (existing.length > 0) {
+    const tab = existing[0];
+    await chrome.tabs.update(tab.id, { active: true, url: reviewUrl });
+    if (tab.windowId !== undefined) {
+      await chrome.windows.update(tab.windowId, { focused: true });
+    }
+  } else {
+    await chrome.tabs.create({ url: reviewUrl });
+  }
+  window.close();
+}
+
 async function captureAndSend() {
   captureButton.disabled = true;
   setStatus("Reading page...");
@@ -71,7 +90,7 @@ async function captureAndSend() {
 
     let html =
       `Found ${data.count} transaction${data.count === 1 ? "" : "s"}. ` +
-      `<a href="${APP_URL}/import/review" target="_blank">Review them &rarr;</a>`;
+      `<a href="${APP_URL}/import/review" id="review-link">Review them &rarr;</a>`;
 
     if (typeof data.bank_balance === "number") {
       const fmt = (n) => `$${n.toFixed(2)}`;
@@ -86,6 +105,10 @@ async function captureAndSend() {
     }
 
     setStatusHtml(html);
+    document.getElementById("review-link")?.addEventListener("click", (e) => {
+      e.preventDefault();
+      openOrFocusReviewTab();
+    });
   } catch (err) {
     setStatus(`Couldn't do that: ${err.message}`, true);
   } finally {
