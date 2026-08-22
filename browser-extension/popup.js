@@ -31,6 +31,18 @@ async function loadAccounts() {
       option.textContent = account.name;
       accountSelect.appendChild(option);
     }
+
+    // Without this, the select defaults to whichever account is
+    // alphabetically first -- easy to not notice and capture a real
+    // statement under the wrong account. Remember the last choice
+    // instead, so repeat captures on the same page default correctly.
+    const { lastAccountId } = await chrome.storage.local.get("lastAccountId");
+    if (lastAccountId && accounts.some((a) => String(a.id) === lastAccountId)) {
+      accountSelect.value = lastAccountId;
+    }
+    accountSelect.addEventListener("change", () => {
+      chrome.storage.local.set({ lastAccountId: accountSelect.value });
+    });
   } catch (err) {
     setStatus("Can't reach Expense Tracker -- is it running?", true);
     captureButton.disabled = true;
@@ -59,6 +71,10 @@ async function openOrFocusReviewTab() {
 async function captureAndSend() {
   captureButton.disabled = true;
   setStatus("Reading page...");
+  // Belt-and-suspenders alongside the change listener in loadAccounts --
+  // whatever account is selected at the moment of capture is what gets
+  // remembered, even if no change event happened to fire.
+  chrome.storage.local.set({ lastAccountId: accountSelect.value });
 
   try {
     const [tab] = await chrome.tabs.query({ active: true, currentWindow: true });
