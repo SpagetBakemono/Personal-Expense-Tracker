@@ -10,7 +10,7 @@ from app.import_parser import parse_statement_text
 from app.models import Account
 from app.services import (
     create_pending_imports,
-    delete_pending_import,
+    discard_pending_import,
     get_pending_imports,
     get_projected_balance,
 )
@@ -132,5 +132,5 @@ def review_imports(request: Request, db: Session = Depends(get_db)):
 
 @router.post("/import/{pending_id}/discard")
 def discard_import(pending_id: int, db: Session = Depends(get_db)):
-    delete_pending_import(db, pending_id)
+    discard_pending_import(db, pending_id)
     return RedirectResponse(url="/import/review", status_code=303)

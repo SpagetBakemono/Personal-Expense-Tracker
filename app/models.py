@@ -127,9 +127,12 @@ class Transaction(Base):
 class PendingImport(Base):
     """A transaction candidate parsed from pasted statement text, sitting
     in a review queue -- never counted in any balance/summary/trend
-    calculation (those all query Transaction, not this table). Only
-    becomes a real Transaction if the user confirms it; deleted either way
-    once resolved (confirmed or discarded), never left lingering."""
+    calculation (those all query Transaction, not this table). Confirming
+    one deletes the row (it's now a real Transaction, and future
+    duplicate checks match against that instead). Discarding one is a
+    soft delete (see `discarded`) -- the row stays, just hidden from the
+    review list, so re-capturing the same statement doesn't bring it
+    back."""
 
     __tablename__ = "pending_imports"
 
@@ -143,6 +146,11 @@ class PendingImport(Base):
     # the same account/amount and a nearby date -- surfaced in the review
     # list so an already-hand-logged transaction doesn't get double-counted.
     possible_duplicate: Mapped[bool] = mapped_column(Boolean, default=False)
+    # Soft delete for "Discard" -- kept around (not hard-deleted) so a
+    # later re-capture of the same statement can recognize this exact
+    # candidate was already rejected and skip recreating it, instead of
+    # silently reappearing every time the page gets captured again.
+    discarded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     account: Mapped["Account"] = relationship("Account", foreign_keys=[account_id])

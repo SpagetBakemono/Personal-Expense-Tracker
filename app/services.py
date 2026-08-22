@@ -529,9 +529,30 @@ def _looks_like_duplicate(db: Session, account_id: int, txn_date: date, amount: 
             PendingImport.amount == amount,
             PendingImport.date >= window_start,
             PendingImport.date <= window_end,
+            PendingImport.discarded == False,  # noqa: E712
         )
     )
     return existing_pending is not None
+
+
+def _previously_discarded(db: Session, account_id: int, txn_date: date, amount: Decimal) -> bool:
+    """A candidate the user already explicitly discarded shouldn't come
+    back just because the same (or an overlapping) statement got
+    re-captured -- discard is a decision, not a temporary dismissal, so
+    this is checked separately from (and takes priority over) the
+    possible-duplicate flag."""
+    window_start = txn_date - timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
+    window_end = txn_date + timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
+    existing = db.scalar(
+        select(PendingImport.id).where(
+            PendingImport.account_id == account_id,
+            PendingImport.amount == amount,
+            PendingImport.date >= window_start,
+            PendingImport.date <= window_end,
+            PendingImport.discarded == True,  # noqa: E712
+        )
+    )
+    return existing is not None
 
 
 def create_pending_imports(
@@ -553,6 +574,9 @@ def create_pending_imports(
         except (KeyError, ValueError, InvalidOperation, TypeError):
             continue
 
+        if _previously_discarded(db, account_id, txn_date, amount):
+            continue
+
         pending = PendingImport(
             date=txn_date,
             amount=amount,
@@ -570,14 +594,19 @@ def create_pending_imports(
 
 def get_pending_imports(db: Session) -> list[PendingImport]:
     return db.scalars(
-        select(PendingImport).order_by(PendingImport.date.desc())
+        select(PendingImport)
+        .where(PendingImport.discarded == False)  # noqa: E712
+        .order_by(PendingImport.date.desc())
     ).all()
 
 
-def delete_pending_import(db: Session, pending_id: int) -> None:
+def discard_pending_import(db: Session, pending_id: int) -> None:
+    """Soft delete -- the row stays (see PendingImport.discarded) so a
+    later re-capture of the same statement recognizes it was already
+    rejected instead of recreating it."""
     pending = db.get(PendingImport, pending_id)
     if pending:
-        db.delete(pending)
+        pending.discarded = True
         db.commit()
 
 

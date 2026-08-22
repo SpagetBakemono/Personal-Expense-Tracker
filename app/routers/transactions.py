@@ -92,6 +92,13 @@ def create_transaction(
             db.delete(pending)
 
     db.commit()
+
+    # Back to the review queue when this came from one, so confirming a
+    # batch of import candidates one at a time doesn't dead-end at the
+    # dashboard after every single row -- that was the whole reason
+    # someone would re-run the capture instead of continuing the review.
+    if pending_import_id:
+        return RedirectResponse(url="/import/review", status_code=303)
     return RedirectResponse(url="/", status_code=303)
 
 
