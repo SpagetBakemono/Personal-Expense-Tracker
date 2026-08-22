@@ -45,11 +45,21 @@ CATEGORY_COLOR_SLOTS = [
 def get_account_balance(db: Session, account: Account) -> Decimal:
     balance = account.opening_balance
 
+    # opening_balance is a snapshot as of opening_balance_date -- anything
+    # already reflected in that snapshot must not also be summed here, or
+    # a transaction dated before it (e.g. imported statement history that
+    # predates when the account was set up in the app) double-counts.
     outgoing = db.scalars(
-        select(Transaction).where(Transaction.account_id == account.id)
+        select(Transaction).where(
+            Transaction.account_id == account.id,
+            Transaction.date >= account.opening_balance_date,
+        )
     ).all()
     incoming = db.scalars(
-        select(Transaction).where(Transaction.to_account_id == account.id)
+        select(Transaction).where(
+            Transaction.to_account_id == account.id,
+            Transaction.date >= account.opening_balance_date,
+        )
     ).all()
 
     is_liability = account.type == AccountType.CREDIT_CARD
@@ -92,6 +102,12 @@ def get_projected_balance(
 
     for c in candidates:
         if c.possible_duplicate:
+            continue
+        # Same rule as get_account_balance: a candidate dated before the
+        # opening-balance snapshot is already baked into that number --
+        # confirming it later will correctly have zero effect on the
+        # balance, so it shouldn't be projected to have one here either.
+        if c.date < account.opening_balance_date:
             continue
         if c.suggested_type == TransactionType.INCOME:
             balance += -c.amount if is_liability else c.amount
@@ -357,6 +373,10 @@ def get_balance_history(
     accounts = db.scalars(select(Account)).all()
     balance = {a.id: a.opening_balance for a in accounts}
     is_liability = {a.id: a.type == AccountType.CREDIT_CARD for a in accounts}
+    # A transaction dated before an account's own opening_balance_date is
+    # already reflected in that snapshot -- applying its effect too would
+    # double-count it (same rule as get_account_balance).
+    opening_balance_date = {a.id: a.opening_balance_date for a in accounts}
 
     boundaries = _balance_history_boundaries(start, end, granularity)
     if not boundaries:
@@ -377,13 +397,18 @@ def get_balance_history(
     for boundary in boundaries:
         while txn_idx < len(txns) and txns[txn_idx].date <= boundary:
             t = txns[txn_idx]
-            if t.type == TransactionType.INCOME:
+            from_predates_opening = t.date < opening_balance_date.get(t.account_id, t.date)
+            if t.type == TransactionType.INCOME and not from_predates_opening:
                 balance[t.account_id] += -t.amount if is_liability[t.account_id] else t.amount
-            elif t.type == TransactionType.EXPENSE:
+            elif t.type == TransactionType.EXPENSE and not from_predates_opening:
                 balance[t.account_id] += t.amount if is_liability[t.account_id] else -t.amount
             elif t.type == TransactionType.TRANSFER:
-                balance[t.account_id] += t.amount if is_liability[t.account_id] else -t.amount
-                if t.to_account_id is not None:
+                if not from_predates_opening:
+                    balance[t.account_id] += t.amount if is_liability[t.account_id] else -t.amount
+                to_predates_opening = t.to_account_id is not None and t.date < opening_balance_date.get(
+                    t.to_account_id, t.date
+                )
+                if t.to_account_id is not None and not to_predates_opening:
                     balance[t.to_account_id] += (
                         -t.amount if is_liability[t.to_account_id] else t.amount
                     )
@@ -476,10 +501,18 @@ def _looks_like_duplicate(db: Session, account_id: int, txn_date: date, amount: 
     """A pending/posted date can shift by a day between when you logged
     something by hand and when the bank's statement settles it -- exact
     date matching would miss real duplicates, so this allows a 1-day
-    window either side."""
+    window either side.
+
+    Checks confirmed Transactions AND other PendingImport rows already in
+    the queue -- without the second check, re-capturing the same (or an
+    overlapping) statement page creates a whole second set of "new"
+    candidates instead of recognizing the first batch is already sitting
+    there unconfirmed, silently doubling everything in the projected
+    balance."""
     window_start = txn_date - timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
     window_end = txn_date + timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
-    existing = db.scalar(
+
+    existing_txn = db.scalar(
         select(Transaction.id).where(
             Transaction.account_id == account_id,
             Transaction.amount == amount,
@@ -487,7 +520,18 @@ def _looks_like_duplicate(db: Session, account_id: int, txn_date: date, amount: 
             Transaction.date <= window_end,
         )
     )
-    return existing is not None
+    if existing_txn is not None:
+        return True
+
+    existing_pending = db.scalar(
+        select(PendingImport.id).where(
+            PendingImport.account_id == account_id,
+            PendingImport.amount == amount,
+            PendingImport.date >= window_start,
+            PendingImport.date <= window_end,
+        )
+    )
+    return existing_pending is not None
 
 
 def create_pending_imports(
