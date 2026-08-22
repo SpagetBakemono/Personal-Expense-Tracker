@@ -9,15 +9,24 @@ structured candidates out -- callers decide what happens with the result
 """
 import json
 import os
+import time
 from datetime import date
 
 from dotenv import load_dotenv
 from google import genai
-from google.genai import types
+from google.genai import errors, types
 
 load_dotenv()
 
 MODEL = "gemini-3.6-flash"
+
+# Gemini's free tier occasionally returns 503 ("high demand") or 429
+# (rate limit) -- both are transient and worth a couple of short retries
+# rather than failing the whole import on the first hiccup. Anything else
+# (bad key, bad request) is a real problem and should fail immediately.
+RETRYABLE_CODES = {429, 503}
+MAX_ATTEMPTS = 3
+RETRY_DELAY_SECONDS = 2
 
 EXTRACTION_PROMPT = """\
 Today's date is {today}. Extract every individual transaction line from the
@@ -70,11 +79,19 @@ def parse_statement_text(text: str) -> dict:
     # get garbage-collected mid-request raised "Cannot send a request, as
     # the client has been closed".
     client = genai.Client(api_key=api_key)
-    response = client.models.generate_content(
-        model=MODEL,
-        contents=EXTRACTION_PROMPT.format(text=text, today=date.today().isoformat()),
-        config=types.GenerateContentConfig(response_mime_type="application/json"),
-    )
+
+    for attempt in range(1, MAX_ATTEMPTS + 1):
+        try:
+            response = client.models.generate_content(
+                model=MODEL,
+                contents=EXTRACTION_PROMPT.format(text=text, today=date.today().isoformat()),
+                config=types.GenerateContentConfig(response_mime_type="application/json"),
+            )
+            break
+        except errors.APIError as e:
+            if e.code not in RETRYABLE_CODES or attempt == MAX_ATTEMPTS:
+                raise
+            time.sleep(RETRY_DELAY_SECONDS * attempt)
 
     data = json.loads(response.text)
     if not isinstance(data, dict) or not isinstance(data.get("transactions"), list):
