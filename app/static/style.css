@@ -166,6 +166,13 @@ button:hover { opacity: 0.9; }
 
 .actions-col { text-align: right; }
 
+/* Durable "what did the last capture do" banner on /import/review --
+   neutral by default, tinted only once there's an actual balance
+   verdict to react to. */
+.capture-log { margin-bottom: 16px; }
+.capture-log.ok { border-color: var(--good); }
+.capture-log.mismatch { border-color: var(--danger); }
+
 /* Small inline-table buttons (Edit, Mark received) -- same footprint
    whether it's a <button> or an <a>, so the two read as one family of
    row actions instead of a button next to a bare link. */

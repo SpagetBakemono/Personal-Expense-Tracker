@@ -30,7 +30,7 @@ import enum
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Numeric, String, Text
+from sqlalchemy import Boolean, Date, DateTime, ForeignKey, Integer, Numeric, String, Text
 from sqlalchemy import Enum as SAEnum
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
@@ -152,5 +152,26 @@ class PendingImport(Base):
     # silently reappearing every time the page gets captured again.
     discarded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+
+    account: Mapped["Account"] = relationship("Account", foreign_keys=[account_id])
+
+
+class ImportCapture(Base):
+    """A durable log line for one statement-capture event (extension or
+    manual paste) -- the popup's "Found N transactions, balance
+    matches/doesn't" summary lives only in that popup's DOM, which
+    closes the instant you switch tabs. This is what lets /import/review
+    show that same summary again after the fact, instead of the result
+    being lost the moment focus moves anywhere else."""
+
+    __tablename__ = "import_captures"
+
+    id: Mapped[int] = mapped_column(primary_key=True)
+    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
+    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
+    transactions_found: Mapped[int] = mapped_column(Integer)
+    bank_balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    app_balance: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
+    balance_matches: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     account: Mapped["Account"] = relationship("Account", foreign_keys=[account_id])

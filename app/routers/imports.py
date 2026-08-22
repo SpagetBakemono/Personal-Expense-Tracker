@@ -1,3 +1,4 @@
+from datetime import datetime
 from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Form, Request
@@ -11,12 +12,28 @@ from app.models import Account
 from app.services import (
     create_pending_imports,
     discard_pending_import,
+    get_last_import_capture,
     get_pending_imports,
     get_projected_balance,
+    log_import_capture,
 )
 from app.templating import templates
 
 router = APIRouter()
+
+
+def _relative_time(dt: datetime) -> str:
+    seconds = (datetime.utcnow() - dt).total_seconds()
+    if seconds < 60:
+        return "just now"
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    hours = int(minutes // 60)
+    if hours < 24:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    days = int(hours // 24)
+    return f"{days} day{'s' if days != 1 else ''} ago"
 
 
 @router.get("/api/accounts")
@@ -63,7 +80,8 @@ def parse_import(
             {"accounts": accounts, "error": f"Couldn't parse that: {e}"},
         )
 
-    create_pending_imports(db, account_id, parsed["transactions"])
+    created = create_pending_imports(db, account_id, parsed["transactions"])
+    log_import_capture(db, account_id, len(created))
     return RedirectResponse(url="/import/review", status_code=303)
 
 
@@ -107,19 +125,27 @@ def parse_import_capture(
         except InvalidOperation:
             bank_balance = None
 
+    app_balance = None
+    balance_matches = None
     if bank_balance is not None:
         app_balance = get_projected_balance(db, account, created)
         difference = app_balance - bank_balance
+        # A cent or two of rounding slop shouldn't read as a mismatch --
+        # statements themselves sometimes round.
+        balance_matches = abs(difference) < Decimal("0.01")
         result.update(
             {
                 "bank_balance": float(bank_balance),
                 "app_balance": float(app_balance),
-                # A cent or two of rounding slop shouldn't read as a
-                # mismatch -- statements themselves sometimes round.
-                "balance_matches": abs(difference) < Decimal("0.01"),
+                "balance_matches": balance_matches,
                 "difference": float(difference),
             }
         )
+
+    # The popup showing this result closes the instant you switch tabs --
+    # log it here so /import/review can show the same summary after the
+    # fact instead of it just being gone.
+    log_import_capture(db, account_id, len(created), bank_balance, app_balance, balance_matches)
 
     return result
 
@@ -127,7 +153,18 @@ def parse_import_capture(
 @router.get("/import/review")
 def review_imports(request: Request, db: Session = Depends(get_db)):
     pending = get_pending_imports(db)
-    return templates.TemplateResponse(request, "import_review.html", {"pending": pending})
+    last_capture = get_last_import_capture(db)
+    return templates.TemplateResponse(
+        request,
+        "import_review.html",
+        {
+            "pending": pending,
+            "last_capture": last_capture,
+            "last_capture_relative_time": (
+                _relative_time(last_capture.created_at) if last_capture else None
+            ),
+        },
+    )
 
 
 @router.post("/import/{pending_id}/discard")

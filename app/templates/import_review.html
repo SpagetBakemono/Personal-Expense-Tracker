@@ -3,6 +3,22 @@
 {% block content %}
 <h2>Review import</h2>
 
+{% if last_capture %}
+<div class="card capture-log {{ 'mismatch' if last_capture.balance_matches == false else ('ok' if last_capture.balance_matches else '') }}">
+  <p class="stat-label">Last capture -- {{ last_capture.account.name }}, {{ last_capture_relative_time }}</p>
+  <p style="margin: 4px 0 0; font-size: 14px;">
+    {{ last_capture.transactions_found }} transaction{{ "s" if last_capture.transactions_found != 1 else "" }} found.
+    {% if last_capture.balance_matches is not none %}
+      {% if last_capture.balance_matches %}
+        <span style="color: var(--good);">&check; Balance matches: ${{ "%.2f"|format(last_capture.bank_balance) }}</span>
+      {% else %}
+        <span style="color: var(--danger);">&#9888; Bank says ${{ "%.2f"|format(last_capture.bank_balance) }}, app projects ${{ "%.2f"|format(last_capture.app_balance) }}.</span>
+      {% endif %}
+    {% endif %}
+  </p>
+</div>
+{% endif %}
+
 {% if pending %}
 <p class="empty" style="padding: 0 0 16px;">
   {{ pending|length }} transaction{{ "s" if pending|length != 1 else "" }} parsed, nothing saved yet.

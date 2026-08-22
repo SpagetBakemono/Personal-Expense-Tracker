@@ -20,6 +20,7 @@ from app.models import (
     AccountType,
     Category,
     CategoryKind,
+    ImportCapture,
     PendingImport,
     ReimbursementStatus,
     Transaction,
@@ -608,6 +609,30 @@ def discard_pending_import(db: Session, pending_id: int) -> None:
     if pending:
         pending.discarded = True
         db.commit()
+
+
+def log_import_capture(
+    db: Session,
+    account_id: int,
+    transactions_found: int,
+    bank_balance: Decimal | None = None,
+    app_balance: Decimal | None = None,
+    balance_matches: bool | None = None,
+) -> ImportCapture:
+    capture = ImportCapture(
+        account_id=account_id,
+        transactions_found=transactions_found,
+        bank_balance=bank_balance,
+        app_balance=app_balance,
+        balance_matches=balance_matches,
+    )
+    db.add(capture)
+    db.commit()
+    return capture
+
+
+def get_last_import_capture(db: Session) -> ImportCapture | None:
+    return db.scalar(select(ImportCapture).order_by(ImportCapture.created_at.desc()).limit(1))
 
 
 DEFAULT_EXPENSE_CATEGORIES = [
