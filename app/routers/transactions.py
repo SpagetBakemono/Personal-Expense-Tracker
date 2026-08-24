@@ -76,7 +76,8 @@ def create_transaction(
         category_id=int(category_id) if category_id else None,
         note=note.strip() or None,
         reimbursable=bool(reimbursable) and txn_type == TransactionType.EXPENSE,
-        exclude_from_living=bool(exclude_from_living) and txn_type == TransactionType.EXPENSE,
+        exclude_from_living=bool(exclude_from_living)
+        and txn_type in (TransactionType.EXPENSE, TransactionType.INCOME),
     )
     if txn.reimbursable:
         txn.reimbursement_status = ReimbursementStatus.PENDING
@@ -152,7 +153,10 @@ def update_transaction(
     txn.category_id = int(category_id) if category_id else None
     txn.note = note.strip() or None
     txn.reimbursable = bool(reimbursable) and txn_type == TransactionType.EXPENSE
-    txn.exclude_from_living = bool(exclude_from_living) and txn_type == TransactionType.EXPENSE
+    txn.exclude_from_living = bool(exclude_from_living) and txn_type in (
+        TransactionType.EXPENSE,
+        TransactionType.INCOME,
+    )
 
     # Only (re)open a reimbursement when it's newly marked reimbursable --
     # editing an already-pending or already-received one shouldn't reset

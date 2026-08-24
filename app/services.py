@@ -151,15 +151,25 @@ def get_month_summary(
 
     income = sum((t.amount for t in txns if t.type == TransactionType.INCOME), Decimal(0))
     expenses = sum((t.amount for t in txns if t.type == TransactionType.EXPENSE), Decimal(0))
-    # Same as `expenses` but skips anything flagged exclude_from_living
-    # (tuition, a deposit, ...) -- shown alongside the real total, not
-    # instead of it, so a big one-off doesn't drown out day-to-day spend
-    # without also hiding that it happened.
+    # Same as `expenses`/`income` but skips anything flagged
+    # exclude_from_living (tuition, a security deposit refund, ...) --
+    # shown alongside the real total, not instead of it, so a big one-off
+    # doesn't drown out day-to-day spend without also hiding that it
+    # happened. Applies to income too -- a deposit refund inflates
+    # "living net" the same way an unflagged tuition payment deflates it.
     living_expenses = sum(
         (
             t.amount
             for t in txns
             if t.type == TransactionType.EXPENSE and not t.exclude_from_living
+        ),
+        Decimal(0),
+    )
+    living_income = sum(
+        (
+            t.amount
+            for t in txns
+            if t.type == TransactionType.INCOME and not t.exclude_from_living
         ),
         Decimal(0),
     )
@@ -177,8 +187,9 @@ def get_month_summary(
         "income": income,
         "expenses": expenses,
         "living_expenses": living_expenses,
+        "living_income": living_income,
         "net": income - expenses,
-        "living_net": income - living_expenses,
+        "living_net": living_income - living_expenses,
         "by_category": dict(sorted(by_category.items(), key=lambda kv: -kv[1])),
         "by_category_living": dict(sorted(by_category_living.items(), key=lambda kv: -kv[1])),
         "transactions": sorted(txns, key=lambda t: t.date, reverse=True),
@@ -477,12 +488,16 @@ def get_trailing_average_expense(
 
 
 def get_trailing_average_income(
-    db: Session, months: int = 12, account_id: int | None = None
+    db: Session,
+    months: int = 12,
+    account_id: int | None = None,
+    living_only: bool = False,
 ) -> tuple[Decimal, int]:
-    """Same idea as get_trailing_average_expense but for income -- no
-    living_only variant since exclude_from_living only applies to
-    expenses."""
-    return _trailing_average(db, TransactionType.INCOME, months, account_id, living_only=False)
+    """Same idea as get_trailing_average_expense but for income --
+    living_only=True excludes anything flagged exclude_from_living (a
+    deposit refund, a one-off reimbursement, ...), for the "typical
+    living income" figure."""
+    return _trailing_average(db, TransactionType.INCOME, months, account_id, living_only)
 
 
 def get_pending_reimbursements(db: Session, account_id: int | None = None) -> list[Transaction]:

@@ -56,15 +56,15 @@
   </div>
   <div class="card">
     <p class="stat-label">Income</p>
-    <p class="stat-value">${{ "%.2f"|format(summary.income) }}</p>
-    <p class="stat-sub">Typical ({{ income_avg_months }} mo): ${{ "%.2f"|format(income_avg) }}</p>
+    <p class="stat-value">${{ "%.2f"|format(summary.living_income) }}</p>
+    <p class="stat-sub">Typical ({{ living_income_avg_months }} mo): ${{ "%.2f"|format(living_income_avg) }}</p>
   </div>
   <div class="card">
     <p class="stat-label">Living net</p>
     <p class="stat-value {{ 'positive' if summary.living_net >= 0 else 'negative' }}">
       {{ '+' if summary.living_net >= 0 else '' }}${{ "%.2f"|format(summary.living_net) }}
     </p>
-    <p class="stat-sub">Typical: {{ '+' if (income_avg - living_expense_avg) >= 0 else '' }}${{ "%.2f"|format(income_avg - living_expense_avg) }}</p>
+    <p class="stat-sub">Typical: {{ '+' if (living_income_avg - living_expense_avg) >= 0 else '' }}${{ "%.2f"|format(living_income_avg - living_expense_avg) }}</p>
   </div>
 </div>
 

@@ -47,6 +47,9 @@ def dashboard(
     income_avg, income_avg_months = get_trailing_average_income(
         db, account_id=effective_account_id
     )
+    living_income_avg, living_income_avg_months = get_trailing_average_income(
+        db, account_id=effective_account_id, living_only=True
+    )
 
     pending = get_pending_reimbursements(db, effective_account_id)
 
@@ -70,6 +73,8 @@ def dashboard(
             "living_expense_avg_months": living_expense_avg_months,
             "income_avg": income_avg,
             "income_avg_months": income_avg_months,
+            "living_income_avg": living_income_avg,
+            "living_income_avg_months": living_income_avg_months,
             "pending": pending,
             "max_category": max_category,
             "max_category_living": max_category_living,
