@@ -519,12 +519,18 @@ def _looks_like_duplicate(db: Session, account_id: int, txn_date: date, amount: 
     date matching would miss real duplicates, so this allows a 1-day
     window either side.
 
-    Checks confirmed Transactions AND other PendingImport rows already in
-    the queue -- without the second check, re-capturing the same (or an
-    overlapping) statement page creates a whole second set of "new"
-    candidates instead of recognizing the first batch is already sitting
-    there unconfirmed, silently doubling everything in the projected
-    balance."""
+    Checks confirmed Transactions and ANY PendingImport row -- active
+    (already sitting in the queue from an overlapping capture) or
+    discarded (you already decided about something like this before).
+    Either way this only ever flags the candidate for review; it must
+    never silently skip creating it. An earlier version skipped creation
+    outright on a discarded match, keyed on account+amount+date alone --
+    with no merchant check, that meant a handful of discarded rows (e.g.
+    a repeated $3 transit fare) could quietly block every future real
+    transaction that happened to share an amount and a nearby date,
+    forever, with the review queue just looking empty and no visible
+    sign why. A false "possible duplicate" flag is a minor annoyance;
+    a transaction that never appears at all is a much worse failure."""
     window_start = txn_date - timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
     window_end = txn_date + timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
 
@@ -545,30 +551,9 @@ def _looks_like_duplicate(db: Session, account_id: int, txn_date: date, amount: 
             PendingImport.amount == amount,
             PendingImport.date >= window_start,
             PendingImport.date <= window_end,
-            PendingImport.discarded == False,  # noqa: E712
         )
     )
     return existing_pending is not None
-
-
-def _previously_discarded(db: Session, account_id: int, txn_date: date, amount: Decimal) -> bool:
-    """A candidate the user already explicitly discarded shouldn't come
-    back just because the same (or an overlapping) statement got
-    re-captured -- discard is a decision, not a temporary dismissal, so
-    this is checked separately from (and takes priority over) the
-    possible-duplicate flag."""
-    window_start = txn_date - timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
-    window_end = txn_date + timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
-    existing = db.scalar(
-        select(PendingImport.id).where(
-            PendingImport.account_id == account_id,
-            PendingImport.amount == amount,
-            PendingImport.date >= window_start,
-            PendingImport.date <= window_end,
-            PendingImport.discarded == True,  # noqa: E712
-        )
-    )
-    return existing is not None
 
 
 def create_pending_imports(
@@ -588,9 +573,6 @@ def create_pending_imports(
             merchant = (row.get("merchant") or "").strip() or "(unknown)"
             suggested_type = TransactionType(row.get("type", "expense"))
         except (KeyError, ValueError, InvalidOperation, TypeError):
-            continue
-
-        if _previously_discarded(db, account_id, txn_date, amount):
             continue
 
         pending = PendingImport(

@@ -131,8 +131,7 @@ class PendingImport(Base):
     one deletes the row (it's now a real Transaction, and future
     duplicate checks match against that instead). Discarding one is a
     soft delete (see `discarded`) -- the row stays, just hidden from the
-    review list, so re-capturing the same statement doesn't bring it
-    back."""
+    review list."""
 
     __tablename__ = "pending_imports"
 
@@ -142,14 +141,19 @@ class PendingImport(Base):
     merchant: Mapped[str] = mapped_column(Text)
     suggested_type: Mapped[TransactionType] = mapped_column(SAEnum(TransactionType))
     account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
-    # Computed at import time by checking for an existing Transaction with
-    # the same account/amount and a nearby date -- surfaced in the review
-    # list so an already-hand-logged transaction doesn't get double-counted.
+    # Computed at import time by checking for an existing Transaction, or
+    # any other PendingImport row (active or discarded), with the same
+    # account/amount and a nearby date -- surfaced as a warning so an
+    # already-logged (or already-decided-about) transaction doesn't get
+    # confirmed a second time. Deliberately a flag, never a silent skip:
+    # an earlier version skipped recreating a candidate outright when it
+    # matched a discarded row, keyed on account+amount+date with no
+    # merchant check -- a handful of discarded rows (e.g. a repeated $3
+    # transit fare) could then silently block every future real
+    # transaction sharing that amount, forever, with no visible sign why.
     possible_duplicate: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Soft delete for "Discard" -- kept around (not hard-deleted) so a
-    # later re-capture of the same statement can recognize this exact
-    # candidate was already rejected and skip recreating it, instead of
-    # silently reappearing every time the page gets captured again.
+    # Soft delete for "Discard" -- kept around (not hard-deleted) so it
+    # still contributes to the possible_duplicate flag above.
     discarded: Mapped[bool] = mapped_column(Boolean, default=False)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
