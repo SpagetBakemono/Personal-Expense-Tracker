@@ -51,21 +51,31 @@ async function loadAccounts() {
 
 async function openOrFocusReviewTab() {
   const reviewUrl = `${APP_URL}/import/review`;
-  // host_permissions already covers APP_URL, which is what lets the url
-  // filter here work without asking for the much broader "tabs"
-  // permission (see manifest.json).
-  const existing = await chrome.tabs.query({ url: `${APP_URL}/*` });
+  try {
+    // host_permissions already covers APP_URL, which is what lets the
+    // url filter here work without asking for the much broader "tabs"
+    // permission (see manifest.json).
+    const existing = await chrome.tabs.query({ url: `${APP_URL}/*` });
 
-  if (existing.length > 0) {
-    const tab = existing[0];
-    await chrome.tabs.update(tab.id, { active: true, url: reviewUrl });
-    if (tab.windowId !== undefined) {
-      await chrome.windows.update(tab.windowId, { focused: true });
+    if (existing.length > 0) {
+      const tab = existing[0];
+      await chrome.tabs.update(tab.id, { active: true, url: reviewUrl });
+      if (tab.windowId !== undefined) {
+        await chrome.windows.update(tab.windowId, { focused: true });
+      }
+    } else {
+      await chrome.tabs.create({ url: reviewUrl });
     }
-  } else {
-    await chrome.tabs.create({ url: reviewUrl });
+    window.close();
+  } catch (err) {
+    // Anything above failing silently would mean the click just does
+    // nothing -- fall back to a plain link, which is a normal browser
+    // navigation and can't fail the way a chrome.tabs API call can.
+    setStatusHtml(
+      `Couldn't switch tabs automatically. ` +
+      `<a href="${reviewUrl}" target="_blank">Open the review queue &rarr;</a>`
+    );
   }
-  window.close();
 }
 
 async function captureAndSend() {

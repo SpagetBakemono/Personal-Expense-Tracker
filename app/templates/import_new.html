@@ -6,6 +6,10 @@
   Paste the transaction list from your bank/card's website below. Nothing
   is saved automatically -- each one lands in a review queue for you to
   confirm, edit, or discard.
+  {% set _pending_count = pending_import_count() %}
+  {% if _pending_count > 0 %}
+  <a href="/import/review">{{ _pending_count }} already waiting for review &rarr;</a>
+  {% endif %}
 </p>
 
 {% if not accounts %}
