@@ -1,7 +1,16 @@
 {% extends "base.html" %}
 {% block title %}Review import{% endblock %}
 {% block content %}
-<h2>Review import</h2>
+<div style="display:flex; justify-content:space-between; align-items:baseline;">
+  <h2 style="margin-bottom: 0;">Review import</h2>
+  {% if total_backlog > 0 %}
+  {% set row_word = "row" if total_backlog == 1 else "rows" %}
+  <form method="post" action="/import/clear" style="margin:0;"
+        onsubmit="return confirm('Clear the entire import backlog -- {{ total_backlog }} {{ row_word }}, including discard history? This only affects unconfirmed import candidates, never your real transactions. Cannot be undone.');">
+    <button type="submit" class="btn-sm btn-sm-outline">Clear backlog</button>
+  </form>
+  {% endif %}
+</div>
 
 {% if last_capture %}
 <div class="card capture-log {{ 'mismatch' if last_capture.balance_matches == false else ('ok' if last_capture.balance_matches else '') }}">

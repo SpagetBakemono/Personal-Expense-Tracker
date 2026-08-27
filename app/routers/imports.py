@@ -8,8 +8,9 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.import_parser import parse_statement_text
-from app.models import Account
+from app.models import Account, PendingImport
 from app.services import (
+    clear_pending_imports,
     create_pending_imports,
     discard_pending_import,
     get_last_import_capture,
@@ -154,6 +155,11 @@ def parse_import_capture(
 def review_imports(request: Request, db: Session = Depends(get_db)):
     pending = get_pending_imports(db)
     last_capture = get_last_import_capture(db)
+    # Includes discarded rows too -- "Clear backlog" wipes both, so it
+    # should show up even when the visible queue is empty but discard
+    # history is still piled up (silently causing possible_duplicate
+    # noise on future captures).
+    total_backlog = db.query(PendingImport).count()
     return templates.TemplateResponse(
         request,
         "import_review.html",
@@ -163,6 +169,7 @@ def review_imports(request: Request, db: Session = Depends(get_db)):
             "last_capture_relative_time": (
                 _relative_time(last_capture.created_at) if last_capture else None
             ),
+            "total_backlog": total_backlog,
         },
     )
 
@@ -170,4 +177,15 @@ def review_imports(request: Request, db: Session = Depends(get_db)):
 @router.post("/import/{pending_id}/discard")
 def discard_import(pending_id: int, db: Session = Depends(get_db)):
     discard_pending_import(db, pending_id)
+    return RedirectResponse(url="/import/review", status_code=303)
+
+
+@router.post("/import/clear")
+def clear_import_backlog(db: Session = Depends(get_db)):
+    """Wipes the whole PendingImport table (active and discarded), not
+    just the visible queue -- also clears the discard history that
+    drives the possible_duplicate flag, so a queue/history that's become
+    more noise than signal (e.g. after a run of accidental re-captures)
+    can be reset without deleting any real Transaction."""
+    clear_pending_imports(db)
     return RedirectResponse(url="/import/review", status_code=303)

@@ -600,12 +600,23 @@ def get_pending_imports(db: Session) -> list[PendingImport]:
 
 def discard_pending_import(db: Session, pending_id: int) -> None:
     """Soft delete -- the row stays (see PendingImport.discarded) so a
-    later re-capture of the same statement recognizes it was already
-    rejected instead of recreating it."""
+    later re-capture of something matching it shows a possible_duplicate
+    flag instead of no signal at all."""
     pending = db.get(PendingImport, pending_id)
     if pending:
         pending.discarded = True
         db.commit()
+
+
+def clear_pending_imports(db: Session) -> int:
+    """Hard-deletes every PendingImport row, active or discarded -- a
+    full reset for when the queue (or its discard history) has become
+    more noise than signal, e.g. after a run of accidental re-captures.
+    Only ever touches this table; confirmed Transactions are never
+    affected. Returns the number of rows removed."""
+    count = db.query(PendingImport).delete()
+    db.commit()
+    return count
 
 
 def log_import_capture(
