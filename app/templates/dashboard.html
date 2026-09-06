@@ -11,7 +11,15 @@
 </div>
 {% endif %}
 
-<h2>{{ month_name }}{{ " -- " + selected_account.name if selected_account else "" }}</h2>
+{% set _account_qs = "&account_id=" + selected_account_id|string if selected_account_id else "" %}
+<div style="display:flex; align-items:baseline; gap:12px;">
+  <a href="/?month={{ prev_month_value }}{{ _account_qs }}" class="btn-sm btn-sm-outline" aria-label="Previous month">&larr;</a>
+  <h2 style="margin: 0;">{{ month_name }}{{ " -- " + selected_account.name if selected_account else "" }}</h2>
+  {% if not is_current_month %}
+  <a href="/?month={{ next_month_value }}{{ _account_qs }}" class="btn-sm btn-sm-outline" aria-label="Next month">&rarr;</a>
+  <a href="/{{ _account_qs|replace('&', '?', 1) }}" class="btn-sm btn-sm-outline">Today</a>
+  {% endif %}
+</div>
 
 <form class="filter-row" method="get" action="/">
   <div>
@@ -22,6 +30,10 @@
       <option value="{{ account.id }}" {{ "selected" if selected_account and account.id == selected_account.id else "" }}>{{ account.name }}</option>
       {% endfor %}
     </select>
+  </div>
+  <div>
+    <label for="month">Month</label>
+    <input type="month" id="month" name="month" value="{{ month_value }}" max="{{ current_month_value }}" onchange="this.form.submit()" />
   </div>
   <noscript><button type="submit">Update</button></noscript>
 </form>

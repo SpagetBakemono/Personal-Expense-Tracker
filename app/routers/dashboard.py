@@ -1,5 +1,6 @@
 from datetime import date
 
+from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, Request
 from sqlalchemy.orm import Session
 
@@ -17,13 +18,30 @@ from app.templating import templates
 router = APIRouter()
 
 
+def _parse_month(value: str | None) -> date | None:
+    if not value:
+        return None
+    try:
+        year, month = value.split("-")
+        return date(int(year), int(month), 1)
+    except (ValueError, TypeError):
+        return None
+
+
 @router.get("/")
 def dashboard(
     request: Request,
     account_id: str | None = None,
+    month: str | None = None,
     db: Session = Depends(get_db),
 ):
     today = date.today()
+    this_month = date(today.year, today.month, 1)
+    # A future month has nothing to show and no "typical" history to
+    # anchor to -- cap at the current month rather than rendering an
+    # empty page that looks broken.
+    selected_month = min(_parse_month(month) or this_month, this_month)
+
     balances = get_all_balances(db)
     total_balance = get_total_balance(balances)
 
@@ -36,19 +54,21 @@ def dashboard(
     # URL) falls back to unfiltered rather than silently showing nothing.
     effective_account_id = selected_account.id if selected_account else None
 
-    summary = get_month_summary(db, today.year, today.month, effective_account_id)
+    summary = get_month_summary(
+        db, selected_month.year, selected_month.month, effective_account_id
+    )
 
     expense_avg, expense_avg_months = get_trailing_average_expense(
-        db, account_id=effective_account_id
+        db, account_id=effective_account_id, as_of=selected_month
     )
     living_expense_avg, living_expense_avg_months = get_trailing_average_expense(
-        db, account_id=effective_account_id, living_only=True
+        db, account_id=effective_account_id, living_only=True, as_of=selected_month
     )
     income_avg, income_avg_months = get_trailing_average_income(
-        db, account_id=effective_account_id
+        db, account_id=effective_account_id, as_of=selected_month
     )
     living_income_avg, living_income_avg_months = get_trailing_average_income(
-        db, account_id=effective_account_id, living_only=True
+        db, account_id=effective_account_id, living_only=True, as_of=selected_month
     )
 
     pending = get_pending_reimbursements(db, effective_account_id)
@@ -57,6 +77,9 @@ def dashboard(
     max_category_living = (
         max(summary["by_category_living"].values()) if summary["by_category_living"] else 1
     )
+
+    prev_month = selected_month - relativedelta(months=1)
+    next_month = selected_month + relativedelta(months=1)
 
     return templates.TemplateResponse(
         request,
@@ -78,6 +101,11 @@ def dashboard(
             "pending": pending,
             "max_category": max_category,
             "max_category_living": max_category_living,
-            "month_name": today.strftime("%B %Y"),
+            "month_name": selected_month.strftime("%B %Y"),
+            "month_value": selected_month.strftime("%Y-%m"),
+            "prev_month_value": prev_month.strftime("%Y-%m"),
+            "next_month_value": next_month.strftime("%Y-%m"),
+            "current_month_value": this_month.strftime("%Y-%m"),
+            "is_current_month": selected_month == this_month,
         },
     )

@@ -436,22 +436,32 @@ def _trailing_average(
     months: int,
     account_id: int | None,
     living_only: bool,
+    as_of: date | None = None,
 ) -> tuple[Decimal, int]:
     """Shared windowing logic behind get_trailing_average_expense/income:
     divides by however many months of matching history actually exist
     (capped at `months`), not always by `months` -- otherwise a fresh
     ledger with a few days of data would understate the average by 10-20x
     until a full window of history accumulates. Returns (average, months
-    the average is actually based on) so the UI can label it honestly."""
-    today = date.today()
-    # "Trailing `months`" = this (partial) month plus the (months - 1)
-    # months before it, so the window spans exactly `months` calendar-month
-    # buckets -- keeps the numerator (summed months) and denominator
-    # (months_covered below) counting the same thing.
-    window_start = date(today.year, today.month, 1) - relativedelta(months=months - 1)
+    the average is actually based on) so the UI can label it honestly.
+
+    as_of anchors the trailing window to a specific month instead of
+    always the current one -- the dashboard passes whichever month is
+    being viewed, so browsing to a past month shows the "typical" figure
+    as it stood then, not one quietly computed through today (which
+    would leak months the viewed period hasn't reached yet)."""
+    as_of_month = date((as_of or date.today()).year, (as_of or date.today()).month, 1)
+    # Exclusive upper bound -- nothing dated after the viewed month counts,
+    # same reasoning as the lower bound below.
+    window_end = as_of_month + relativedelta(months=1)
+    # "Trailing `months`" = the viewed (partial, if current) month plus the
+    # (months - 1) months before it, so the window spans exactly `months`
+    # calendar-month buckets -- keeps the numerator (summed months) and
+    # denominator (months_covered below) counting the same thing.
+    window_start = as_of_month - relativedelta(months=months - 1)
 
     def _scope(query):
-        query = query.where(Transaction.type == txn_type)
+        query = query.where(Transaction.type == txn_type, Transaction.date < window_end)
         if account_id is not None:
             query = query.where(Transaction.account_id == account_id)
         if living_only:
@@ -467,7 +477,7 @@ def _trailing_average(
     txns = db.scalars(_scope(select(Transaction)).where(Transaction.date >= start)).all()
     total = sum((t.amount for t in txns), Decimal(0))
 
-    months_covered = (today.year - start.year) * 12 + (today.month - start.month) + 1
+    months_covered = (as_of_month.year - start.year) * 12 + (as_of_month.month - start.month) + 1
     months_covered = max(1, min(months, months_covered))
 
     return total / months_covered, months_covered
@@ -478,13 +488,15 @@ def get_trailing_average_expense(
     months: int = 12,
     account_id: int | None = None,
     living_only: bool = False,
+    as_of: date | None = None,
 ) -> tuple[Decimal, int]:
     """Smoothed monthly spend, so a single lumpy cost (tuition, etc.)
     doesn't make one month look catastrophic and the rest artificially
     frugal -- shown alongside the raw monthly total, not instead of it.
     living_only=True excludes anything flagged exclude_from_living, for
-    the "typical living expense" figure."""
-    return _trailing_average(db, TransactionType.EXPENSE, months, account_id, living_only)
+    the "typical living expense" figure. as_of anchors the trailing
+    window to a specific month (defaults to the current one)."""
+    return _trailing_average(db, TransactionType.EXPENSE, months, account_id, living_only, as_of)
 
 
 def get_trailing_average_income(
@@ -492,12 +504,13 @@ def get_trailing_average_income(
     months: int = 12,
     account_id: int | None = None,
     living_only: bool = False,
+    as_of: date | None = None,
 ) -> tuple[Decimal, int]:
     """Same idea as get_trailing_average_expense but for income --
     living_only=True excludes anything flagged exclude_from_living (a
     deposit refund, a one-off reimbursement, ...), for the "typical
     living income" figure."""
-    return _trailing_average(db, TransactionType.INCOME, months, account_id, living_only)
+    return _trailing_average(db, TransactionType.INCOME, months, account_id, living_only, as_of)
 
 
 def get_pending_reimbursements(db: Session, account_id: int | None = None) -> list[Transaction]:
