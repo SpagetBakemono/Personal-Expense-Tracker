@@ -27,6 +27,48 @@
 </div>
 {% endmacro %}
 
+{% macro living_summary_chart(view) %}
+<div class="card trend-card">
+  <div class="trend-legend">
+    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--danger);"></span> Living expenses</div>
+    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--good);"></span> Living income</div>
+  </div>
+  <div class="trend-chart">
+    {% for c in view.cols %}
+    <div class="trend-col">
+      <div class="grouped-bar-track">
+        <div class="grouped-bar expense" style="height: {{ c.expense_pct }}%;" title="Living expenses: ${{ '%.2f'|format(c.living_expenses) }}"></div>
+        <div class="grouped-bar income" style="height: {{ c.income_pct }}%;" title="Living income: ${{ '%.2f'|format(c.living_income) }}"></div>
+      </div>
+      <div class="trend-month-label">{{ c.month_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+
+<div class="card trend-card" style="margin-top: 16px;">
+  <div class="trend-legend">
+    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--good);"></span> Living net (positive)</div>
+    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--danger);"></span> Living net (negative)</div>
+  </div>
+  <div class="diverging-chart">
+    {% for c in view.cols %}
+    <div class="diverging-col">
+      <div class="diverging-track">
+        <div class="diverging-zero-line"></div>
+        {% if c.net_positive %}
+        <div class="diverging-bar positive" style="height: {{ c.net_half_pct }}%;" title="Living net: +${{ '%.2f'|format(c.living_net) }}"></div>
+        {% else %}
+        <div class="diverging-bar negative" style="height: {{ c.net_half_pct }}%;" title="Living net: -${{ '%.2f'|format(-c.living_net) }}"></div>
+        {% endif %}
+      </div>
+      <div class="trend-month-label">{{ c.month_label }}</div>
+    </div>
+    {% endfor %}
+  </div>
+</div>
+{% endmacro %}
+
 {% macro balance_chart(view, chart_w, chart_h) %}
 {% if not view.coords %}
 <p class="empty">Not enough history yet to chart a balance trend.</p>
@@ -99,6 +141,14 @@
   {{ category_chart(view_living) }}
 </div>
 
+{% endif %}
+
+<h2>Living income vs. expenses</h2>
+
+{% if living_summary_view.cols %}
+{{ living_summary_chart(living_summary_view) }}
+{% else %}
+<p class="empty">No data yet for this range.</p>
 {% endif %}
 
 <h2>Balance over time</h2>

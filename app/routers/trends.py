@@ -12,6 +12,7 @@ from app.services import (
     get_balance_history,
     get_category_color_series,
     get_monthly_all_categories_trend,
+    get_monthly_living_summary_trend,
     get_monthly_single_category_trend,
 )
 from app.templating import templates
@@ -82,6 +83,46 @@ def _category_trend_view(
         )
     max_total = max((d["total"] for d in data), default=Decimal(0))
     return {"data": data, "legend": legend, "max_total": max_total}
+
+
+def _living_summary_view(db: Session, start_month: date, months: int) -> dict:
+    """Geometry for two small charts: grouped Living Expenses/Income bars
+    (both always non-negative, sharing one scale) and a diverging Living
+    Net bar (can go negative, so it needs its own zero-anchored scale --
+    a bar above the line for a positive month, below for a negative one).
+    Percentages, not px, so the bars rescale if the surrounding card is
+    resized (same technique as the category trend chart)."""
+    rows = get_monthly_living_summary_trend(db, start_month, months)
+
+    max_pos = max(
+        [r["living_expenses"] for r in rows] + [r["living_income"] for r in rows] + [Decimal(0)]
+    )
+    max_abs_net = max([abs(r["living_net"]) for r in rows] + [Decimal(0)])
+
+    cols = []
+    for r in rows:
+        cols.append(
+            {
+                "month_label": r["month_label"],
+                "living_expenses": r["living_expenses"],
+                "living_income": r["living_income"],
+                "living_net": r["living_net"],
+                "expense_pct": round(float(r["living_expenses"] / max_pos * 100), 2)
+                if max_pos > 0
+                else 0,
+                "income_pct": round(float(r["living_income"] / max_pos * 100), 2)
+                if max_pos > 0
+                else 0,
+                # Half-scale (0-50) since this bar only ever occupies one
+                # side of the diverging chart's zero line -- the other 50
+                # belongs to the opposite sign.
+                "net_half_pct": round(float(abs(r["living_net"]) / max_abs_net * 50), 2)
+                if max_abs_net > 0
+                else 0,
+                "net_positive": r["living_net"] >= 0,
+            }
+        )
+    return {"cols": cols}
 
 
 def _balance_chart_view(db: Session, start: date, end: date, granularity: str) -> dict:
@@ -198,6 +239,8 @@ def trends(
         db, selected_category_id, selected_category, start_month, months, living_only=True
     )
 
+    living_summary_view = _living_summary_view(db, start_month, months)
+
     balance_views = {
         g: _balance_chart_view(db, start_month, end_month, g) for g, _ in GRANULARITIES
     }
@@ -213,6 +256,7 @@ def trends(
             "end_value": end_month.strftime("%Y-%m"),
             "view_all": view_all,
             "view_living": view_living,
+            "living_summary_view": living_summary_view,
             "balance_views": balance_views,
             "granularities": GRANULARITIES,
             "balance_chart_w": BALANCE_CHART_W,

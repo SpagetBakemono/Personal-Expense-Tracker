@@ -335,6 +335,28 @@ def get_monthly_all_categories_trend(
     return result, legend
 
 
+def get_monthly_living_summary_trend(db: Session, start: date, months: int) -> list[dict]:
+    """Per-month {living_expenses, living_income, living_net} over a
+    range -- reuses get_month_summary's living-only aggregation one
+    month at a time (fine at personal-ledger scale) for the Trends
+    "Living income vs expenses" and "Living net" charts, which show the
+    same living-scoped figures as the dashboard but across many months
+    instead of just the current one."""
+    result = []
+    for i in range(months):
+        m = start + relativedelta(months=i)
+        s = get_month_summary(db, m.year, m.month)
+        result.append(
+            {
+                "month_label": m.strftime("%b %Y"),
+                "living_expenses": s["living_expenses"],
+                "living_income": s["living_income"],
+                "living_net": s["living_net"],
+            }
+        )
+    return result
+
+
 MAX_BALANCE_POINTS = 120
 
 

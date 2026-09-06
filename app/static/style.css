@@ -264,6 +264,36 @@ button:hover { opacity: 0.9; }
 .trend-seg.rounded-top { border-radius: 4px 4px 0 0; }
 .trend-month-label { font-size: 11px; color: var(--muted); margin-top: 8px; white-space: nowrap; }
 
+/* Living expenses vs income: two independent bars side by side (not
+   stacked) sharing one scale, sitting inside the same .trend-chart /
+   .trend-col scaffold as the category chart above. */
+.grouped-bar-track { width: 22px; flex: 1 1 0; min-height: 0; display: flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 3px; }
+.grouped-bar { width: 9px; border-radius: 3px 3px 0 0; }
+.grouped-bar.expense { background: var(--danger); }
+.grouped-bar.income { background: var(--good); }
+
+/* Living net: a single bar per month that can go either way, so it gets
+   its own zero-anchored track instead of growing up from a bottom
+   baseline -- a positive month's bar sits above the line, a negative
+   month's below it, each scaled 0-50% (half the track) against the same
+   max magnitude so the two directions are visually comparable. */
+.diverging-chart {
+  display: flex;
+  gap: 16px;
+  height: 140px;
+  padding: 6px 0;
+  border-bottom: 1px solid var(--border);
+  resize: vertical;
+  overflow: auto;
+  min-height: 100px;
+}
+.diverging-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
+.diverging-track { position: relative; flex: 1 1 0; min-height: 0; width: 22px; }
+.diverging-zero-line { position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--border); }
+.diverging-bar { position: absolute; left: 0; right: 0; border-radius: 3px; }
+.diverging-bar.positive { bottom: 50%; background: var(--good); border-radius: 3px 3px 0 0; }
+.diverging-bar.negative { top: 50%; background: var(--danger); border-radius: 0 0 3px 3px; }
+
 .balance-chart { width: 100%; }
 .balance-svg { width: 100%; height: 180px; display: block; }
 .balance-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
