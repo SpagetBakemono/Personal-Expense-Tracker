@@ -154,12 +154,12 @@
 </table>
 {% endif %}
 
-<h2>Recent transactions</h2>
+<h2>Transactions ({{ summary.transactions|length }})</h2>
 {% if summary.transactions %}
 <table>
   <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Note</th><th>Amount</th><th class="actions-col"></th></tr></thead>
   <tbody>
-    {% for t in summary.transactions[:15] %}
+    {% for t in summary.transactions %}
     <tr>
       <td>{{ t.date.isoformat() }}</td>
       <td><span class="badge">{{ t.type.value }}</span></td>
