@@ -8,7 +8,6 @@ from sqlalchemy.orm import Session
 from app.database import get_db
 from app.import_parser import parse_statement_text
 from app.models import Account, PendingImport
-from app.plaid_sync import LAST_SYNC_ERRORS
 from app.services import (
     clear_pending_imports,
     create_pending_imports,
@@ -81,14 +80,6 @@ def parse_import(
 def review_imports(request: Request, db: Session = Depends(get_db)):
     pending = get_pending_imports(db)
     last_capture = get_last_import_capture(db)
-    # Auto-sync runs in the background at launch; if any bank failed, say
-    # so here too -- otherwise a stale queue just looks like a quiet week.
-    sync_errors = [
-        # list() snapshots it -- the startup sync thread may be writing to
-        # it while this request reads.
-        (db.get(Account, account_id), error)
-        for account_id, error in list(LAST_SYNC_ERRORS.items())
-    ]
     # Includes discarded rows too -- "Clear backlog" wipes both, so it
     # should show up even when the visible queue is empty but discard
     # history is still piled up (silently causing possible_duplicate
@@ -104,7 +95,6 @@ def review_imports(request: Request, db: Session = Depends(get_db)):
                 _relative_time(last_capture.created_at) if last_capture else None
             ),
             "total_backlog": total_backlog,
-            "sync_errors": [(a, e) for a, e in sync_errors if a is not None],
         },
     )
 

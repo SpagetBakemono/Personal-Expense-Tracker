@@ -63,15 +63,34 @@ fix it in the same change that makes it stale.
 
 ## Importing transactions
 
-Three sources, one pipeline: Plaid sync (`app/plaid_sync.py`, runs in a
-background thread on every launch plus a per-account "Sync now"), and
-manual statement paste (`/import`, Gemini-parsed) for anything Plaid can't
-reach. All of them feed `create_pending_imports` -> the `/import/review`
-queue; nothing reaches the real ledger until confirmed there. Skip
-pending/processing transactions and anything before an account's
-`opening_balance_date`. A Plaid sync failure is recorded in
-`LAST_SYNC_ERRORS` and shown on Accounts and Review -- never fail silently.
-(A Chrome capture extension existed before Plaid; it was removed.)
+Plaid sync (`app/plaid_sync.py`, runs in a background thread on every
+launch plus a per-account "Sync now") posts straight to the ledger -- no
+review queue (the user found the queue too much work once real data
+flowed). What keeps that safe:
+- Every row a sync touches carries a unique `plaid_transaction_id` (or
+  `plaid_pair_transaction_id` for the other side of a transfer), so a
+  re-sync is idempotent.
+- A new Plaid transaction first tries to *adopt* an unlinked hand-entered
+  row with the same amount dated 5 days before to 1 day after it (banks
+  post late, never early). Transactions are processed posted-before-pending,
+  oldest first, and each claims the *oldest* candidate -- MTA posts several
+  days of $3 fares in one batch, and nearest-date matching double-posted
+  some. Adopted rows keep their own date/note/category.
+- On an account's first sync (cursor None), anything dated on or before
+  the ledger's latest row is adopt-only -- that period was already
+  reconciled by hand.
+- Pending transactions post with `pending=True` and are updated in place
+  when they post. After each sync, Plaid's *posted* balance is compared
+  against the ledger minus pending rows; a mismatch or a failure shows in
+  the red alerts banner on Dashboard and Accounts -- never fail silently.
+- Card payments seen from both checking and the card merge into one
+  TRANSFER.
+
+Manual statement paste (`/import`, Gemini-parsed) still exists for
+accounts Plaid can't reach (Cash), and still goes through the
+`/import/review` queue. Anything before an account's
+`opening_balance_date` is ignored by both. (A Chrome capture extension
+existed before Plaid; it was removed.)
 
 ## Security
 

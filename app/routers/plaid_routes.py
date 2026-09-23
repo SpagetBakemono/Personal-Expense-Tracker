@@ -1,5 +1,3 @@
-from urllib.parse import quote
-
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
@@ -87,14 +85,9 @@ def plaid_sync(account_id: int, db: Session = Depends(get_db)):
     account = db.get(Account, account_id)
     if account is None or not account.plaid_access_token:
         return RedirectResponse(url="/accounts", status_code=303)
-    error = sync_account_recording_errors(db, account)
-    if error:
-        return RedirectResponse(
-            url=f"/accounts?sync_error={quote(f'{account.name}: {error}')}", status_code=303
-        )
-    # The review page's "Last capture" banner shows what this sync found
-    # and whether the balance matched.
-    return RedirectResponse(url="/import/review", status_code=303)
+    # A failure or a balance mismatch shows in the alerts banner there.
+    sync_account_recording_errors(db, account)
+    return RedirectResponse(url="/accounts", status_code=303)
 
 
 @router.post("/accounts/{account_id}/plaid/disconnect")

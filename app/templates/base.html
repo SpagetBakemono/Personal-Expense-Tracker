@@ -16,7 +16,9 @@
       <a href="/trends">Trends</a>
       <a href="/import">Import</a>
       {% set _pending_count = pending_import_count() %}
-      <a href="/import/review">Review{% if _pending_count > 0 %} ({{ _pending_count }}){% endif %}</a>
+      {# Bank transactions post automatically; this queue only holds
+         manual statement pastes, so the link only shows when needed. #}
+      {% if _pending_count > 0 %}<a href="/import/review">Review ({{ _pending_count }})</a>{% endif %}
     </nav>
   </header>
   <main class="container">

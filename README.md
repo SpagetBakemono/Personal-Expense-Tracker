@@ -56,17 +56,21 @@ underlying script if setting that up again.
   either isolated (just that category) or broken out across every category
   at once with a fixed, validated color per category.
 - **Bank sync via Plaid**: link an account from the Accounts page ("Connect
-  with Plaid"); new transactions are pulled automatically every time the
-  app launches (plus a per-account "Sync now"). Needs `PLAID_CLIENT_ID`,
+  with Plaid"); new transactions post to the ledger automatically every
+  time the app launches (plus a per-account "Sync now"), auto-categorized
+  from your own past choices for that merchant or Plaid's category. Pending
+  charges show a "pending" badge. Transactions you already entered by hand
+  are matched, not duplicated, and each sync checks the bank's balance
+  against the app's (a mismatch shows as a red alert). Needs `PLAID_CLIENT_ID`,
   `PLAID_SECRET_SANDBOX` / `PLAID_SECRET_PRODUCTION`, `PLAID_ENV` and
   `PLAID_TOKEN_KEY` in `.env` -- see `.env.example`. Access tokens are
   encrypted at rest.
 - **Statement paste** (`/import`): for anything Plaid can't reach -- paste
   raw statement text, parsed by Gemini (needs `GEMINI_API_KEY`).
-- **Review queue** (`/import/review`): everything imported, from either
-  source, waits here for Confirm/Discard before touching your real ledger.
-  Likely duplicates are flagged, and each import cross-checks the bank's
-  stated balance against the app's.
+- **Review queue** (`/import/review`): pasted statement transactions wait
+  here for Confirm/Discard before touching your real ledger. Likely
+  duplicates are flagged, and each paste cross-checks the bank's stated
+  balance against the app's.
 
 ## Not built yet
 
@@ -81,10 +85,10 @@ app/
   main.py            FastAPI app, security middleware, startup (tables, seeds, Plaid sync)
   database.py        DB engine/session (SQLite in Dev, set DATABASE_URL for Prod)
   models.py          Account, Category, Transaction, PendingImport, ImportCapture
-  services.py        Balances, summaries, trends, reimbursements, review queue
+  services.py        Balances, summaries, trends, reimbursements, paste review queue
   templating.py      Shared Jinja2Templates instance (cache-busts static assets)
   plaid_client.py    Plaid API calls (link, exchange, sync, balance) -- no DB
-  plaid_sync.py      Plaid -> review queue, per account and on startup
+  plaid_sync.py      Plaid -> ledger (auto-post, dedupe, balance check), on startup
   token_crypto.py    Encrypts Plaid access tokens at rest
   import_parser.py   Gemini-based statement text -> transaction candidates
   routers/           dashboard, accounts, transactions, trends, imports, plaid_routes

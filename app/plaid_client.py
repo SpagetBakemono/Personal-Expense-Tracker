@@ -137,43 +137,53 @@ def get_balance(access_token: str, plaid_account_id: str) -> Decimal | None:
     return None
 
 
-def sync_transactions(access_token: str, plaid_account_id: str, cursor: str | None) -> dict:
-    """Wraps /transactions/sync for one account within an Item, filtered
-    to just that account_id (an Item can cover several). Pending
-    transactions are dropped here -- same "don't count what hasn't
-    posted" rule already applied to statement Processing/Pending charges
-    everywhere else in this app; once Plaid transitions one to posted, a
-    later sync call returns it as a fresh `added` entry.
+def _shape(t) -> dict:
+    # Plaid's sign convention: positive amount = money left the account,
+    # regardless of account type. "outflow" is recorded explicitly so the
+    # caller maps it onto this app's own model (where a card purchase is
+    # an EXPENSE that *increases* what's owed).
+    amount = Decimal(str(t.amount))
+    # authorized_date is when you actually bought it -- what statements
+    # and hand-entered rows use. `date` is the later posting date, which
+    # would sit 1-3 days off every manual entry and defeat matching.
+    when = t.authorized_date or t.date
+    pfc = t.personal_finance_category
+    return {
+        "plaid_id": t.transaction_id,
+        "pending_plaid_id": t.pending_transaction_id,
+        "date": when,
+        "amount": abs(amount),
+        "outflow": amount > 0,
+        "merchant": t.merchant_name or t.name or "(unknown)",
+        "pending": bool(t.pending),
+        "category_primary": pfc.primary if pfc else None,
+        "category_detailed": pfc.detailed if pfc else None,
+    }
 
-    Returns {transactions: [{date, amount, merchant, type}, ...],
-    next_cursor, has_more} -- the transactions list is already shaped
-    for create_pending_imports."""
+
+def sync_transactions(access_token: str, plaid_account_id: str, cursor: str | None) -> dict:
+    """Wraps /transactions/sync for one account within an Item (an Item
+    can cover several; everything is filtered to plaid_account_id).
+    Follows has_more to the end so the returned cursor is only ever a
+    complete bookmark.
+
+    Returns {added, modified: [shaped dicts], removed: [plaid ids],
+    next_cursor}. Pending transactions are included -- when one posts,
+    Plaid removes the pending id and adds a posted one whose
+    pending_plaid_id points back at it, which the caller uses to update
+    the same row in place."""
     client = _client()
-    transactions = []
+    added, modified, removed = [], [], []
     next_cursor = cursor
     has_more = True
 
     while has_more:
         request = TransactionsSyncRequest(access_token=access_token, cursor=next_cursor or "")
         response = client.transactions_sync(request)
-        for t in response.added:
-            if t.account_id != plaid_account_id or t.pending:
-                continue
-            # Plaid's sign convention: positive amount = money left the
-            # account, regardless of account type -- unlike this app's
-            # own credit-card-is-a-liability convention, which only
-            # applies once a transaction is already inside our own
-            # Transaction/PendingImport model.
-            amount = Decimal(str(t.amount))
-            transactions.append(
-                {
-                    "date": t.date.isoformat() if hasattr(t.date, "isoformat") else str(t.date),
-                    "amount": str(abs(amount)),
-                    "merchant": t.merchant_name or t.name or "(unknown)",
-                    "type": "expense" if amount > 0 else "income",
-                }
-            )
+        added += [_shape(t) for t in response.added if t.account_id == plaid_account_id]
+        modified += [_shape(t) for t in response.modified if t.account_id == plaid_account_id]
+        removed += [t.transaction_id for t in response.removed if t.account_id == plaid_account_id]
         next_cursor = response.next_cursor
         has_more = response.has_more
 
-    return {"transactions": transactions, "next_cursor": next_cursor}
+    return {"added": added, "modified": modified, "removed": removed, "next_cursor": next_cursor}

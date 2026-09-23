@@ -1,0 +1,10 @@
+{# Bank-sync problems needing attention: failed syncs and balances that
+   disagree with the bank. Shared by the Dashboard and Accounts pages. #}
+{% if sync_alerts %}
+<div class="card capture-log mismatch" style="margin-bottom: 16px;">
+  <p class="stat-label">Bank sync needs attention</p>
+  {% for alert in sync_alerts %}
+  <p style="margin: 4px 0 0; font-size: 14px; color: var(--danger);">&#9888; {{ alert }}</p>
+  {% endfor %}
+</div>
+{% endif %}

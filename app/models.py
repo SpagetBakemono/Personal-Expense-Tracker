@@ -123,6 +123,20 @@ class Transaction(Base):
     # it, instead of one number that either hides or overstates it.
     exclude_from_living: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Set when this row came from (or was matched to) a Plaid transaction
+    # -- unique, so a re-sync can never post the same bank transaction
+    # twice. The pair id is the *other* side of a transfer between two
+    # linked accounts (e.g. a card payment seen by both checking and the
+    # card), so one row covers both without double-counting.
+    plaid_transaction_id: Mapped[str | None] = mapped_column(String(64), unique=True, nullable=True)
+    plaid_pair_transaction_id: Mapped[str | None] = mapped_column(
+        String(64), unique=True, nullable=True
+    )
+    # Authorized at the bank but not yet posted. Counts toward balances
+    # (it's real money you've spent), but the bank's *posted* balance
+    # doesn't include it -- the sync's balance check accounts for that.
+    pending: Mapped[bool] = mapped_column(Boolean, default=False)
+
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
     account: Mapped["Account"] = relationship(

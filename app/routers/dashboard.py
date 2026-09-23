@@ -13,6 +13,7 @@ from app.services import (
     get_trailing_average_expense,
     get_trailing_average_income,
 )
+from app.plaid_sync import get_sync_alerts
 from app.templating import templates
 
 router = APIRouter()
@@ -101,6 +102,7 @@ def dashboard(
             "pending": pending,
             "max_category": max_category,
             "max_category_living": max_category_living,
+            "sync_alerts": get_sync_alerts(db),
             "month_name": selected_month.strftime("%B %Y"),
             "month_value": selected_month.strftime("%Y-%m"),
             "prev_month_value": prev_month.strftime("%Y-%m"),
