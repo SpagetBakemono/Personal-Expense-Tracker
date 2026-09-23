@@ -199,6 +199,26 @@ def _pair_transfer(db: Session, account: Account, t: dict) -> bool:
     return True
 
 
+def _funded_wallet(db: Session, account: Account, t: dict) -> Account | None:
+    """The other Plaid-linked, non-card account t's merchant names (e.g. a
+    BofA debit described "Venmo" while Venmo is linked), if any. Only a
+    linked wallet counts: an unlinked one's payments aren't in the ledger,
+    so the debit itself has to stay the expense."""
+    if not t["outflow"] or account.type == AccountType.CREDIT_CARD:
+        return None
+    merchant = t["merchant"].lower()
+    for other in db.scalars(
+        select(Account).where(
+            Account.id != account.id,
+            Account.plaid_access_token.isnot(None),
+            Account.type != AccountType.CREDIT_CARD,
+        )
+    ):
+        if len(other.name) >= 4 and other.name.lower() in merchant:
+            return other
+    return None
+
+
 def _apply_added(db: Session, account: Account, t: dict, adopt_only: bool) -> bool:
     """Returns True if a new ledger row was created."""
     if _find_by_plaid_id(db, t["plaid_id"]):
@@ -220,8 +240,17 @@ def _apply_added(db: Session, account: Account, t: dict, adopt_only: bool) -> bo
         return False
 
     is_card = account.type == AccountType.CREDIT_CARD
+    wallet = _funded_wallet(db, account, t)
+    to_account_id = None
     if not t["outflow"]:
         txn_type = TransactionType.INCOME
+    elif wallet is not None:
+        # A bank debit that tops up a wallet like Venmo: when a Venmo
+        # payment exceeds the Venmo balance, Venmo pulls the difference
+        # from the bank, but its own feed only shows the payment. Log the
+        # pull as a transfer into the wallet, so the payment (an expense
+        # on the wallet's side) is counted once and both balances match.
+        txn_type, to_account_id = TransactionType.TRANSFER, wallet.id
     elif t["category_detailed"] == CARD_PAYMENT and not is_card:
         # Paying a card: a transfer, not spending. The destination gets
         # filled in when the card's side of the payment syncs.
@@ -235,6 +264,7 @@ def _apply_added(db: Session, account: Account, t: dict, adopt_only: bool) -> bo
             amount=t["amount"],
             type=txn_type,
             account_id=account.id,
+            to_account_id=to_account_id,
             category_id=None if txn_type == TransactionType.TRANSFER else _pick_category(db, t, txn_type),
             note=t["merchant"],
             plaid_transaction_id=t["plaid_id"],
