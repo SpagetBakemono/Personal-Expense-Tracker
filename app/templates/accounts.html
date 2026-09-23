@@ -2,6 +2,9 @@
 {% block title %}Accounts{% endblock %}
 {% block content %}
 <h2>Accounts</h2>
+{% if sync_error %}
+<p class="empty" style="color: var(--danger); padding: 0 0 12px;">Sync failed -- {{ sync_error }}</p>
+{% endif %}
 {% if balances %}
 <table>
   <thead><tr><th>Name</th><th>Type</th><th>Opening balance</th><th>Balance</th><th>Bank sync</th><th></th></tr></thead>
@@ -21,6 +24,9 @@
       <td>
         {% if account.plaid_access_token %}
           <span class="badge" style="color: var(--good); border-color: var(--good);">Connected via Plaid</span>
+          <form method="post" action="/accounts/{{ account.id }}/plaid/sync" style="margin:0;display:inline;">
+            <button type="submit" class="btn-sm btn-sm-accent">Sync now</button>
+          </form>
           <form method="post" action="/accounts/{{ account.id }}/plaid/disconnect" style="margin:0;display:inline;"
                 onsubmit='return confirm({{ ("Disconnect " ~ account.name ~ " from Plaid? Transactions already imported stay put.")|tojson }});'>
             <button type="submit" class="btn-sm btn-sm-outline">Disconnect</button>

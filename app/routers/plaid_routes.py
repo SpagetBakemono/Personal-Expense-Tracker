@@ -1,3 +1,5 @@
+from urllib.parse import quote
+
 from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse, RedirectResponse
 from pydantic import BaseModel
@@ -5,20 +7,22 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Account
-from app.plaid_client import create_link_token, exchange_public_token, get_accounts
+from app.plaid_client import (
+    create_link_token,
+    describe_error,
+    exchange_public_token,
+    get_accounts,
+)
+from app.plaid_sync import sync_plaid_account
 from app.token_crypto import encrypt_token
 
 router = APIRouter()
 
 
 def _plaid_error(e: Exception) -> JSONResponse:
-    # Plaid's ApiException carries the useful part (error_code/message)
-    # in its body -- surface it instead of a bare 500 so a bad key or a
+    # Surface the real reason instead of a bare 500, so a bad key or a
     # sandbox token used against production is diagnosable from the UI.
-    # Neither that body nor a network error's message contains the
-    # client secret or access token (those only travel in the request).
-    detail = getattr(e, "body", None) or str(e)
-    return JSONResponse({"error": f"Plaid error: {detail}"}, status_code=502)
+    return JSONResponse({"error": f"Plaid error: {describe_error(e)}"}, status_code=502)
 
 
 @router.post("/plaid/create-link-token")
@@ -75,6 +79,23 @@ def plaid_exchange(body: ExchangeRequest, db: Session = Depends(get_db)):
     account.plaid_cursor = None
     db.commit()
     return {"ok": True, "linked": match["name"]}
+
+
+@router.post("/accounts/{account_id}/plaid/sync")
+def plaid_sync(account_id: int, db: Session = Depends(get_db)):
+    account = db.get(Account, account_id)
+    if account is None or not account.plaid_access_token:
+        return RedirectResponse(url="/accounts", status_code=303)
+    try:
+        sync_plaid_account(db, account)
+    except Exception as e:  # SDK, network, or a token that won't decrypt
+        return RedirectResponse(
+            url=f"/accounts?sync_error={quote(f'{account.name}: {describe_error(e)}')}",
+            status_code=303,
+        )
+    # The review page's "Last capture" banner shows what this sync found
+    # and whether the balance matched.
+    return RedirectResponse(url="/import/review", status_code=303)
 
 
 @router.post("/accounts/{account_id}/plaid/disconnect")

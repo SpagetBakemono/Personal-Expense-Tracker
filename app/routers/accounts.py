@@ -15,10 +15,10 @@ router = APIRouter()
 
 
 @router.get("/accounts")
-def list_accounts(request: Request, db: Session = Depends(get_db)):
+def list_accounts(request: Request, sync_error: str | None = None, db: Session = Depends(get_db)):
     balances = get_all_balances(db)
     return templates.TemplateResponse(
-        request, "accounts.html", {"balances": balances}
+        request, "accounts.html", {"balances": balances, "sync_error": sync_error}
     )
 
 

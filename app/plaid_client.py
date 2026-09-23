@@ -5,6 +5,7 @@ env-driven credentials, a fresh client per call, no DB access here --
 callers decide what happens with the result (the same pending-review
 queue statement imports already feed).
 """
+import json
 import os
 from decimal import Decimal
 
@@ -53,6 +54,21 @@ def _client() -> plaid_api.PlaidApi:
     # impersonate Plaid and harvest these credentials.
     configuration.ssl_ca_cert = certifi.where()
     return plaid_api.PlaidApi(plaid.ApiClient(configuration))
+
+
+def describe_error(e: Exception) -> str:
+    """One readable line for the UI. Plaid API errors carry a JSON body
+    with error_code/error_message; anything else (network, config) is
+    just its own message. Neither ever contains the client secret or an
+    access token -- those only travel in the request."""
+    body = getattr(e, "body", None)
+    if body:
+        try:
+            data = json.loads(body)
+            return f"{data.get('error_code', 'PLAID_ERROR')}: {data.get('error_message', '').strip()}"
+        except (ValueError, TypeError):
+            pass
+    return str(e)
 
 
 def create_link_token() -> str:
