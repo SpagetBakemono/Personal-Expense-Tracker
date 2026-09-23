@@ -12,10 +12,14 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env             # optional -- only needed for statement import (see below)
+cp .env.example .env             # optional -- only for bank sync / statement import (see below)
+chmod 600 .env
 
-uvicorn app.main:app --reload
+uvicorn app.main:app --host 127.0.0.1 --reload
 ```
+
+Always bind to `127.0.0.1` -- never `0.0.0.0`, which would expose your
+financial data to every device on the same network.
 
 Then open http://127.0.0.1:8000 in your browser.
 
@@ -51,14 +55,21 @@ underlying script if setting that up again.
 - **Trends** (`/trends`): a category's spend over a custom date range,
   either isolated (just that category) or broken out across every category
   at once with a fixed, validated color per category.
-- Statement import (in progress): paste raw bank/card statement text,
-  parsed into transaction candidates via Gemini's free API tier
-  (`app/import_parser.py`) -- not yet wired to a review queue in the UI.
+- **Bank sync via Plaid**: link an account from the Accounts page ("Connect
+  with Plaid"); new transactions are pulled automatically every time the
+  app launches (plus a per-account "Sync now"). Needs `PLAID_CLIENT_ID`,
+  `PLAID_SECRET_SANDBOX` / `PLAID_SECRET_PRODUCTION`, `PLAID_ENV` and
+  `PLAID_TOKEN_KEY` in `.env` -- see `.env.example`. Access tokens are
+  encrypted at rest.
+- **Statement paste** (`/import`): for anything Plaid can't reach -- paste
+  raw statement text, parsed by Gemini (needs `GEMINI_API_KEY`).
+- **Review queue** (`/import/review`): everything imported, from either
+  source, waits here for Confirm/Discard before touching your real ledger.
+  Likely duplicates are flagged, and each import cross-checks the bank's
+  stated balance against the app's.
 
 ## Not built yet
 
-- The statement-import review queue (confirm/edit/discard parsed
-  transactions before they're saved)
 - A UI for adding custom categories (currently a fixed, seeded list)
 - Budgets per category
 - Deployment to Prod (Postgres + hosting)
@@ -67,13 +78,16 @@ underlying script if setting that up again.
 
 ```
 app/
-  main.py            FastAPI app + startup (creates tables, seeds categories)
+  main.py            FastAPI app, security middleware, startup (tables, seeds, Plaid sync)
   database.py        DB engine/session (SQLite in Dev, set DATABASE_URL for Prod)
-  models.py          Account, Category, Transaction
-  services.py        Balance calculation, monthly summaries, trends, reimbursements
-  templating.py       Shared Jinja2Templates instance (cache-busts static assets)
-  import_parser.py    Gemini-based statement text -> transaction candidates
-  routers/           dashboard.py, accounts.py, transactions.py, trends.py
+  models.py          Account, Category, Transaction, PendingImport, ImportCapture
+  services.py        Balances, summaries, trends, reimbursements, review queue
+  templating.py      Shared Jinja2Templates instance (cache-busts static assets)
+  plaid_client.py    Plaid API calls (link, exchange, sync, balance) -- no DB
+  plaid_sync.py      Plaid -> review queue, per account and on startup
+  token_crypto.py    Encrypts Plaid access tokens at rest
+  import_parser.py   Gemini-based statement text -> transaction candidates
+  routers/           dashboard, accounts, transactions, trends, imports, plaid_routes
   templates/         Jinja2 HTML
   static/            CSS
 ```

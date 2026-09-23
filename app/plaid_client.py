@@ -17,6 +17,7 @@ from plaid.model.accounts_balance_get_request import AccountsBalanceGetRequest
 from plaid.model.accounts_get_request import AccountsGetRequest
 from plaid.model.country_code import CountryCode
 from plaid.model.item_public_token_exchange_request import ItemPublicTokenExchangeRequest
+from plaid.model.item_remove_request import ItemRemoveRequest
 from plaid.model.link_token_create_request import LinkTokenCreateRequest
 from plaid.model.link_token_create_request_user import LinkTokenCreateRequestUser
 from plaid.model.products import Products
@@ -94,6 +95,13 @@ def exchange_public_token(public_token: str) -> str:
     client = _client()
     request = ItemPublicTokenExchangeRequest(public_token=public_token)
     return client.item_public_token_exchange(request).access_token
+
+
+def remove_item(access_token: str) -> None:
+    """Revokes the connection at Plaid: the access token stops working
+    for good, and (on the trial) the connection slot frees up. Just
+    forgetting the token locally would leave both alive."""
+    _client().item_remove(ItemRemoveRequest(access_token=access_token))
 
 
 def get_accounts(access_token: str) -> list[dict]:

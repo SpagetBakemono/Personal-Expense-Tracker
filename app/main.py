@@ -1,12 +1,12 @@
-import re
+import threading
 
 from fastapi import FastAPI, Request
-from fastapi.middleware.cors import CORSMiddleware
 from fastapi.responses import PlainTextResponse
 from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.database import Base, SessionLocal, engine
+from app.plaid_sync import sync_all_linked_accounts
 from app.routers import accounts, dashboard, imports, plaid_routes, transactions, trends
 from app.services import seed_default_categories
 
@@ -16,35 +16,27 @@ app = FastAPI(title="Expense Tracker", docs_url=None, redoc_url=None, openapi_ur
 
 # Listening on 127.0.0.1 keeps other machines out, but not other
 # *websites*: any page open in your browser can send requests to
-# localhost. These three layers close that off.
+# localhost. The two layers below close that off. There's deliberately no
+# CORS middleware -- with none, browsers refuse to let any other site read
+# this server's responses.
 
-EXTENSION_ORIGIN = re.compile(r"^chrome-extension://[a-p]{32}$")
 UNSAFE_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
 
 @app.middleware("http")
 async def reject_cross_site_writes(request: Request, call_next):
-    """CSRF guard: a write must come from this app's own pages (or the
-    capture extension). Browsers always attach Origin to cross-site
-    POSTs and a page can't forge it, so a mismatch means some other
-    site is trying to act as you. No Origin at all = not a browser
-    (e.g. curl on this machine), which can't be driven by a website."""
+    """CSRF guard: a write must come from this app's own pages. Browsers
+    always attach Origin to cross-site POSTs and a page can't forge it,
+    so a mismatch means some other site is trying to act as you. No
+    Origin at all = not a browser (e.g. curl on this machine), which a
+    website can't drive."""
     if request.method in UNSAFE_METHODS:
         origin = request.headers.get("origin")
         own_origin = f"{request.url.scheme}://{request.headers.get('host', '')}"
-        if origin and origin != own_origin and not EXTENSION_ORIGIN.match(origin):
+        if origin and origin != own_origin:
             return PlainTextResponse("Cross-site request blocked.", status_code=403)
     return await call_next(request)
 
-
-# CORS: only the capture extension may read responses cross-origin --
-# previously "*", which let any website read your data off localhost.
-app.add_middleware(
-    CORSMiddleware,
-    allow_origin_regex=EXTENSION_ORIGIN.pattern,
-    allow_methods=["GET", "POST"],
-    allow_headers=["Content-Type"],
-)
 
 # DNS rebinding guard: a malicious domain can re-resolve itself to
 # 127.0.0.1 and slip past same-origin rules entirely. It still has to
@@ -73,3 +65,8 @@ def on_startup():
         seed_default_categories(db)
     finally:
         db.close()
+
+    # Pull new bank transactions into the review queue on every launch.
+    # Background thread so the page opens immediately instead of waiting
+    # on Plaid; daemon so it never holds up shutdown.
+    threading.Thread(target=sync_all_linked_accounts, daemon=True).start()

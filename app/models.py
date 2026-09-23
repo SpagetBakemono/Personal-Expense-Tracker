@@ -171,12 +171,10 @@ class PendingImport(Base):
 
 
 class ImportCapture(Base):
-    """A durable log line for one statement-capture event (extension or
-    manual paste) -- the popup's "Found N transactions, balance
-    matches/doesn't" summary lives only in that popup's DOM, which
-    closes the instant you switch tabs. This is what lets /import/review
-    show that same summary again after the fact, instead of the result
-    being lost the moment focus moves anywhere else."""
+    """A durable log line for one import event (a Plaid sync or a manual
+    paste): how many candidates it queued and whether the bank's stated
+    balance matched the app's projection. /import/review shows the most
+    recent one, so a background sync's outcome is visible after the fact."""
 
     __tablename__ = "import_captures"
 

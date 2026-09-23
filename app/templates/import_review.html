@@ -12,6 +12,12 @@
   {% endif %}
 </div>
 
+{% for account, error in sync_errors %}
+<p class="empty" style="color: var(--danger); padding: 0 0 12px;">
+  Bank sync failed for {{ account.name }} -- {{ error }}. <a href="/accounts">Manage accounts</a>
+</p>
+{% endfor %}
+
 {% if last_capture %}
 <div class="card capture-log {{ 'mismatch' if last_capture.balance_matches == false else ('ok' if last_capture.balance_matches else '') }}">
   <p class="stat-label">Last capture -- {{ last_capture.account.name }}, {{ last_capture_relative_time }}</p>

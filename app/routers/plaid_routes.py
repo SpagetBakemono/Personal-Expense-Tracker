@@ -12,9 +12,10 @@ from app.plaid_client import (
     describe_error,
     exchange_public_token,
     get_accounts,
+    remove_item,
 )
-from app.plaid_sync import sync_plaid_account
-from app.token_crypto import encrypt_token
+from app.plaid_sync import LAST_SYNC_ERRORS, sync_account_recording_errors
+from app.token_crypto import decrypt_token, encrypt_token
 
 router = APIRouter()
 
@@ -86,12 +87,10 @@ def plaid_sync(account_id: int, db: Session = Depends(get_db)):
     account = db.get(Account, account_id)
     if account is None or not account.plaid_access_token:
         return RedirectResponse(url="/accounts", status_code=303)
-    try:
-        sync_plaid_account(db, account)
-    except Exception as e:  # SDK, network, or a token that won't decrypt
+    error = sync_account_recording_errors(db, account)
+    if error:
         return RedirectResponse(
-            url=f"/accounts?sync_error={quote(f'{account.name}: {describe_error(e)}')}",
-            status_code=303,
+            url=f"/accounts?sync_error={quote(f'{account.name}: {error}')}", status_code=303
         )
     # The review page's "Last capture" banner shows what this sync found
     # and whether the balance matched.
@@ -100,11 +99,19 @@ def plaid_sync(account_id: int, db: Session = Depends(get_db)):
 
 @router.post("/accounts/{account_id}/plaid/disconnect")
 def plaid_disconnect(account_id: int, db: Session = Depends(get_db)):
-    """Only forgets the link locally -- sandbox tokens stop working the
-    moment PLAID_ENV flips to production, so clearing them is how you
-    relink the same account against real data."""
+    """Revokes the connection at Plaid, then forgets it locally. Also how
+    you relink an account against real data after testing in sandbox."""
     account = db.get(Account, account_id)
     if account:
+        if account.plaid_access_token:
+            try:
+                remove_item(decrypt_token(account.plaid_access_token))
+            except Exception as e:  # already revoked, wrong env, network...
+                # Still clear it locally -- a token the app can't use is
+                # worse than useless to keep -- but say so, since it may
+                # still be live at Plaid (revoke it from the dashboard).
+                print(f"[plaid] {account.name}: couldn't revoke at Plaid -- {describe_error(e)}", flush=True)
+        LAST_SYNC_ERRORS.pop(account.id, None)
         account.plaid_access_token = None
         account.plaid_account_id = None
         account.plaid_cursor = None

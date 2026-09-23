@@ -61,6 +61,18 @@ fix it in the same change that makes it stale.
   Trends "all categories" view; the rest fold into a shared "Other" bucket
   (see `get_category_color_series` in `services.py`).
 
+## Importing transactions
+
+Three sources, one pipeline: Plaid sync (`app/plaid_sync.py`, runs in a
+background thread on every launch plus a per-account "Sync now"), and
+manual statement paste (`/import`, Gemini-parsed) for anything Plaid can't
+reach. All of them feed `create_pending_imports` -> the `/import/review`
+queue; nothing reaches the real ledger until confirmed there. Skip
+pending/processing transactions and anything before an account's
+`opening_balance_date`. A Plaid sync failure is recorded in
+`LAST_SYNC_ERRORS` and shown on Accounts and Review -- never fail silently.
+(A Chrome capture extension existed before Plaid; it was removed.)
+
 ## Security
 
 This app holds real financial data and Plaid bank credentials. Binding to
@@ -70,9 +82,10 @@ them without asking:
 
 - `TrustedHostMiddleware` (127.0.0.1/localhost only) blocks DNS rebinding.
 - `reject_cross_site_writes` rejects any POST/PUT/PATCH/DELETE whose
-  `Origin` isn't this app (or the capture extension) -- CSRF protection.
-- CORS is limited to `chrome-extension://` origins. It was once `"*"`,
-  which let any website read data off the local server.
+  `Origin` isn't this app -- CSRF protection.
+- There is deliberately no CORS middleware, so no other site can read
+  responses. It was once `allow_origins=["*"]` (for a since-removed browser
+  extension), which let any website read data off the local server.
 - Always bind uvicorn to `127.0.0.1`, never `0.0.0.0`.
 - Plaid access tokens are Fernet-encrypted before hitting the db
   (`app/token_crypto.py`, key `PLAID_TOKEN_KEY` in `.env`). Never return a

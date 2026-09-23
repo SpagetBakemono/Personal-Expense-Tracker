@@ -34,7 +34,9 @@
         {% elif account.type.value != 'cash' %}
           <button type="button" class="btn-sm btn-sm-accent plaid-connect" data-account-id="{{ account.id }}">Connect with Plaid</button>
         {% endif %}
-        <div class="plaid-status" data-account-id="{{ account.id }}" style="font-size:12px;margin-top:4px;"></div>
+        <div class="plaid-status" data-account-id="{{ account.id }}" style="font-size:12px;margin-top:4px;{{ ' color: var(--danger);' if account.id in last_sync_errors else '' }}">
+          {%- if account.id in last_sync_errors %}Last sync failed: {{ last_sync_errors[account.id] }}{% endif -%}
+        </div>
       </td>
       <td><a href="/accounts/{{ account.id }}/edit">Edit</a></td>
     </tr>

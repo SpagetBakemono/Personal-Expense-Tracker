@@ -1,7 +1,7 @@
 """
-Statement import parsing -- turns raw statement text (pasted by hand, or
-grabbed from a bank page by the browser extension) into structured
-transaction candidates using Gemini's free API tier.
+Statement import parsing -- turns raw statement text pasted by hand into
+structured transaction candidates using Gemini's free API tier. The manual
+fallback for anything Plaid can't reach (cash, unsupported banks).
 
 Nothing here touches the database. This is intentionally just text in,
 structured candidates out -- callers decide what happens with the result
