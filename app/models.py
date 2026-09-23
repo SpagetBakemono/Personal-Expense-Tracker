@@ -69,6 +69,16 @@ class Account(Base):
     opening_balance_date: Mapped[date] = mapped_column(Date, default=date.today)
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 
+    # Set once the account is linked via Plaid (see app/plaid_client.py).
+    # plaid_access_token is a long-lived credential -- it lives here, in
+    # the gitignored db, same as every other real financial record.
+    # plaid_account_id picks out this one account within a linked Item
+    # (an Item can cover several), and plaid_cursor is the
+    # /transactions/sync bookmark so each sync only fetches what's new.
+    plaid_access_token: Mapped[str | None] = mapped_column(Text, nullable=True)
+    plaid_account_id: Mapped[str | None] = mapped_column(String(255), nullable=True)
+    plaid_cursor: Mapped[str | None] = mapped_column(Text, nullable=True)
+
     transactions_from: Mapped[list["Transaction"]] = relationship(
         "Transaction", foreign_keys="Transaction.account_id", back_populates="account"
     )

@@ -23,4 +23,6 @@ fi
 echo "Starting Expense Tracker..."
 ( sleep 1.5; open "$URL" ) &
 
-./.venv/bin/uvicorn app.main:app --port "$PORT"
+# Explicit 127.0.0.1 -- never 0.0.0.0, which would expose your financial
+# data to every device on the same wifi.
+./.venv/bin/uvicorn app.main:app --host 127.0.0.1 --port "$PORT"

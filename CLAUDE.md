@@ -61,6 +61,29 @@ fix it in the same change that makes it stale.
   Trends "all categories" view; the rest fold into a shared "Other" bucket
   (see `get_category_color_series` in `services.py`).
 
+## Security
+
+This app holds real financial data and Plaid bank credentials. Binding to
+127.0.0.1 keeps other *machines* out, but not other *websites* open in the
+same browser -- the layers in `app/main.py` exist for that. Don't weaken
+them without asking:
+
+- `TrustedHostMiddleware` (127.0.0.1/localhost only) blocks DNS rebinding.
+- `reject_cross_site_writes` rejects any POST/PUT/PATCH/DELETE whose
+  `Origin` isn't this app (or the capture extension) -- CSRF protection.
+- CORS is limited to `chrome-extension://` origins. It was once `"*"`,
+  which let any website read data off the local server.
+- Always bind uvicorn to `127.0.0.1`, never `0.0.0.0`.
+- Plaid access tokens are Fernet-encrypted before hitting the db
+  (`app/token_crypto.py`, key `PLAID_TOKEN_KEY` in `.env`). Never return a
+  token (or its ciphertext) to the browser.
+- Never disable TLS verification to fix a certificate error -- point the
+  client at `certifi.where()` instead (see `app/plaid_client.py`).
+- Any value interpolated into inline JS (e.g. an `onsubmit="confirm(...)"`)
+  goes through `|tojson` inside a single-quoted attribute -- HTML
+  autoescaping alone doesn't protect a JS context.
+- `.env` and `expense_tracker.db` are `chmod 600`.
+
 ## Misc
 
 - On macOS there's a separate double-clickable launcher app installed in
