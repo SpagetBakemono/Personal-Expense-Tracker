@@ -76,8 +76,8 @@ flowed). What keeps that safe:
   oldest first, and each claims the *oldest* candidate -- MTA posts several
   days of $3 fares in one batch, and nearest-date matching double-posted
   some. Adopted rows keep their own date/note/category.
-- On an account's first sync (cursor None), anything dated on or before
-  the ledger's latest row is adopt-only -- that period was already
+- On an account's first sync (cursor None), anything dated before the
+  ledger's latest row is adopt-only -- that period was already
   reconciled by hand.
 - Pending transactions post with `pending=True` and are updated in place
   when they post. After each sync, Plaid's *posted* balance is compared

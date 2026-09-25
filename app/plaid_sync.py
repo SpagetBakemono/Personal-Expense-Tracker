@@ -7,7 +7,7 @@ What stands in for a human reviewer:
 - Before creating anything, an entry you already logged by hand (same
   account, amount and direction, within MATCH_WINDOW_DAYS) is *adopted* --
   linked to the Plaid id instead of duplicated.
-- On a newly linked account's first sync, anything dated on or before your
+- On a newly linked account's first sync, anything dated before your
   last entry for it is adopt-only: that stretch is already reconciled, so
   unmatched history is skipped rather than risk double-counting.
 - A card payment seen by both checking and the card becomes one transfer.
@@ -162,9 +162,15 @@ def _pair_transfer(db: Session, account: Account, t: dict) -> bool:
     """Merges t with the other side of the same transfer, if that side has
     already been posted from another linked account."""
     if t["outflow"]:
+        # A card charge is never the paying side of a transfer, even when
+        # Plaid calls it a loan payment (a $10 campus ID-office charge got
+        # merged with an unrelated $10 Zelle into checking that way).
+        if account.type == AccountType.CREDIT_CARD:
+            return False
         # The card saw the payment first and it was posted as income.
         row = db.scalar(
-            select(Transaction).where(
+            select(Transaction).join(Account, Transaction.account_id == Account.id).where(
+                Account.type == AccountType.CREDIT_CARD,
                 Transaction.account_id != account.id,
                 Transaction.type == TransactionType.INCOME,
                 Transaction.plaid_transaction_id.isnot(None),
@@ -346,7 +352,10 @@ def sync_plaid_account(db: Session, account: Account) -> int:
         # Already baked into the opening-balance snapshot.
         if t["date"] < account.opening_balance_date:
             continue
-        adopt_only = backfill_until is not None and t["date"] <= backfill_until
+        # Strictly before: the last hand-entered day may be only partly
+        # entered (a $67.02 AMEX charge on it was skipped with <=). Anything
+        # on that day you did enter is still adopted, not duplicated.
+        adopt_only = backfill_until is not None and t["date"] < backfill_until
         created += _apply_added(db, account, t, adopt_only)
         db.flush()  # later matches in this batch must see earlier ones
     for t in result["modified"]:
