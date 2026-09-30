@@ -9,7 +9,6 @@ from app.database import get_db
 from app.models import (
     Account,
     Category,
-    PendingImport,
     ReimbursementStatus,
     Transaction,
     TransactionType,
@@ -19,11 +18,9 @@ from app.templating import templates
 router = APIRouter()
 
 
-def manual_page(request: Request, db: Session, tab: str = "add", error: str | None = None):
-    """The Manual page: add a transaction by hand, or paste a statement --
-    the two things you do yourself, as opposed to the automatic bank sync.
-    Also rendered by POST /import when a paste fails, so the error shows
-    on the paste tab."""
+def manual_page(request: Request, db: Session):
+    """The Manual page: add a transaction by hand -- for cash, or anything
+    the bank sync can't see. Everything else arrives on its own."""
     return templates.TemplateResponse(
         request,
         "manual.html",
@@ -31,54 +28,18 @@ def manual_page(request: Request, db: Session, tab: str = "add", error: str | No
             "accounts": db.scalars(select(Account).order_by(Account.name)).all(),
             "categories": db.scalars(select(Category).order_by(Category.name)).all(),
             "today": date.today().isoformat(),
-            "prefill": None,
-            "pending_import_id": None,
-            "tab": tab,
-            "error": error,
         },
     )
 
 
 @router.get("/manual")
-def manual(request: Request, tab: str = "add", db: Session = Depends(get_db)):
-    return manual_page(request, db, tab)
+def manual(request: Request, db: Session = Depends(get_db)):
+    return manual_page(request, db)
 
 
 @router.get("/transactions/new")
-def new_transaction_form(
-    request: Request, pending_import_id: int | None = None, db: Session = Depends(get_db)
-):
-    # Plain "add a transaction" lives on the Manual page now; this route
-    # stays for confirming a pasted-statement row from the review list.
-    if pending_import_id is None:
-        return RedirectResponse(url="/manual", status_code=303)
-
-    accounts = db.scalars(select(Account).order_by(Account.name)).all()
-    categories = db.scalars(select(Category).order_by(Category.name)).all()
-
-    prefill = None
-    if pending_import_id is not None:
-        pending = db.get(PendingImport, pending_import_id)
-        if pending is not None:
-            prefill = {
-                "date": pending.date.isoformat(),
-                "amount": pending.amount,
-                "type": pending.suggested_type.value,
-                "account_id": pending.account_id,
-                "note": pending.merchant,
-            }
-
-    return templates.TemplateResponse(
-        request,
-        "transaction_new.html",
-        {
-            "accounts": accounts,
-            "categories": categories,
-            "today": date.today().isoformat(),
-            "prefill": prefill,
-            "pending_import_id": pending_import_id if prefill else None,
-        },
-    )
+def new_transaction_form():
+    return RedirectResponse(url="/manual", status_code=303)
 
 
 @router.post("/transactions")
@@ -94,7 +55,6 @@ def create_transaction(
     # Checkbox is "counts as living": present when ticked, absent when not.
     counts_as_living: str = Form(""),
     is_refund: str = Form(""),
-    pending_import_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
     txn_type = TransactionType(type)
@@ -117,22 +77,8 @@ def create_transaction(
 
     db.add(txn)
 
-    # Confirming an import candidate: this transaction replaces it, so the
-    # queue entry is done -- delete it in the same commit rather than
-    # leaving it to linger and get confirmed a second time by mistake.
-    if pending_import_id:
-        pending = db.get(PendingImport, int(pending_import_id))
-        if pending:
-            db.delete(pending)
-
     db.commit()
 
-    # Back to the review queue when this came from one, so confirming a
-    # batch of import candidates one at a time doesn't dead-end at the
-    # dashboard after every single row -- that was the whole reason
-    # someone would re-run the capture instead of continuing the review.
-    if pending_import_id:
-        return RedirectResponse(url="/import/review", status_code=303)
     return RedirectResponse(url="/", status_code=303)
 
 

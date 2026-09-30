@@ -19,12 +19,6 @@ This encodes the design decisions from planning:
 - Reimbursements are tracked with a lightweight flag + status on the
   original expense, rather than a full receivables ledger. When money
   actually arrives, it's logged as its own INCOME transaction.
-
-- Statement-import candidates (PendingImport) are a completely separate
-  table from Transaction, not a status flag on it -- every balance/summary
-  query already assumes every Transaction row is real money that moved;
-  keeping unconfirmed candidates out of that table entirely means there's
-  no risk of a query forgetting to filter them out.
 """
 import enum
 from datetime import date, datetime
@@ -156,47 +150,10 @@ class Transaction(Base):
     category: Mapped["Category | None"] = relationship(back_populates="transactions")
 
 
-class PendingImport(Base):
-    """A transaction candidate parsed from pasted statement text, sitting
-    in a review queue -- never counted in any balance/summary/trend
-    calculation (those all query Transaction, not this table). Confirming
-    one deletes the row (it's now a real Transaction, and future
-    duplicate checks match against that instead). Discarding one is a
-    soft delete (see `discarded`) -- the row stays, just hidden from the
-    review list."""
-
-    __tablename__ = "pending_imports"
-
-    id: Mapped[int] = mapped_column(primary_key=True)
-    date: Mapped[date] = mapped_column(Date)
-    amount: Mapped[Decimal] = mapped_column(Numeric(12, 2))
-    merchant: Mapped[str] = mapped_column(Text)
-    suggested_type: Mapped[TransactionType] = mapped_column(SAEnum(TransactionType))
-    account_id: Mapped[int] = mapped_column(ForeignKey("accounts.id"))
-    # Computed at import time by checking for an existing Transaction, or
-    # any other PendingImport row (active or discarded), with the same
-    # account/amount and a nearby date -- surfaced as a warning so an
-    # already-logged (or already-decided-about) transaction doesn't get
-    # confirmed a second time. Deliberately a flag, never a silent skip:
-    # an earlier version skipped recreating a candidate outright when it
-    # matched a discarded row, keyed on account+amount+date with no
-    # merchant check -- a handful of discarded rows (e.g. a repeated $3
-    # transit fare) could then silently block every future real
-    # transaction sharing that amount, forever, with no visible sign why.
-    possible_duplicate: Mapped[bool] = mapped_column(Boolean, default=False)
-    # Soft delete for "Discard" -- kept around (not hard-deleted) so it
-    # still contributes to the possible_duplicate flag above.
-    discarded: Mapped[bool] = mapped_column(Boolean, default=False)
-    created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
-
-    account: Mapped["Account"] = relationship("Account", foreign_keys=[account_id])
-
-
 class ImportCapture(Base):
-    """A durable log line for one import event (a Plaid sync or a manual
-    paste): how many candidates it queued and whether the bank's stated
-    balance matched the app's projection. /import/review shows the most
-    recent one, so a background sync's outcome is visible after the fact."""
+    """A durable log line for one bank sync (see app/plaid_sync.py): how
+    many new transactions it posted and whether the bank's balance
+    matched the app's afterwards. The sync alerts read the latest ones."""
 
     __tablename__ = "import_captures"
 

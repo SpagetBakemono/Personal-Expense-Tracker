@@ -12,7 +12,7 @@ python -m venv .venv
 source .venv/bin/activate        # Windows: .venv\Scripts\activate
 pip install -r requirements.txt
 
-cp .env.example .env             # optional -- only for bank sync / statement import (see below)
+cp .env.example .env             # optional -- only for bank sync (see below)
 chmod 600 .env
 
 uvicorn app.main:app --host 127.0.0.1 --reload
@@ -66,13 +66,8 @@ underlying script if setting that up again.
   `PLAID_SECRET_SANDBOX` / `PLAID_SECRET_PRODUCTION`, `PLAID_ENV` and
   `PLAID_TOKEN_KEY` in `.env` -- see `.env.example`. Access tokens are
   encrypted at rest.
-- **Manual** (`/manual`): add a transaction by hand, or paste a statement
-  for anything Plaid can't reach -- paste
-  raw statement text, parsed by Gemini (needs `GEMINI_API_KEY`).
-- **Review queue** (`/import/review`): pasted statement transactions wait
-  here for Confirm/Discard before touching your real ledger. Likely
-  duplicates are flagged, and each paste cross-checks the bank's stated
-  balance against the app's.
+- **Manual** (`/manual`): add a transaction by hand -- for cash, or
+  anything the bank sync can't see.
 
 ## Not built yet
 
@@ -86,14 +81,13 @@ underlying script if setting that up again.
 app/
   main.py            FastAPI app, security middleware, startup (tables, seeds, Plaid sync)
   database.py        DB engine/session (SQLite in Dev, set DATABASE_URL for Prod)
-  models.py          Account, Category, Transaction, PendingImport, ImportCapture
-  services.py        Balances, summaries, trends, reimbursements, paste review queue
+  models.py          Account, Category, Transaction, ImportCapture (sync log)
+  services.py        Balances, summaries, trends, reimbursements
   templating.py      Shared Jinja2Templates instance (cache-busts static assets)
   plaid_client.py    Plaid API calls (link, exchange, sync, balance) -- no DB
   plaid_sync.py      Plaid -> ledger (auto-post, dedupe, balance check), on startup
   token_crypto.py    Encrypts Plaid access tokens at rest
-  import_parser.py   Gemini-based statement text -> transaction candidates
-  routers/           dashboard, accounts, transactions, trends, imports, plaid_routes
+  routers/           dashboard, accounts, transactions (+ Manual), trends, plaid_routes
   templates/         Jinja2 HTML
   static/            CSS
 ```

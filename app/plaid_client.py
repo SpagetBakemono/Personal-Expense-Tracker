@@ -1,9 +1,8 @@
 """
 Plaid client wrapper -- creates Link tokens, exchanges them for access
-tokens, and syncs transactions. Mirrors app/import_parser.py's shape:
-env-driven credentials, a fresh client per call, no DB access here --
-callers decide what happens with the result (the same pending-review
-queue statement imports already feed).
+tokens, and syncs transactions. Env-driven credentials, a fresh client
+per call, no DB access here -- app/plaid_sync.py decides what happens
+with the result.
 """
 import json
 import os

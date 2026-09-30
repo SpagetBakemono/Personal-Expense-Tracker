@@ -4,7 +4,6 @@
 <p class="empty">You need at least one account first. <a href="/accounts/new">Add one</a>.</p>
 {% else %}
 <form class="form-card" method="post" action="{{ '/transactions/%d/edit'|format(txn.id) if txn else '/transactions' }}">
-  {% if pending_import_id %}<input type="hidden" name="pending_import_id" value="{{ pending_import_id }}" />{% endif %}
   <div class="row">
     <div>
       <label for="type">Type</label>

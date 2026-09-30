@@ -86,9 +86,8 @@ fix it in the same change that makes it stale.
   Every chart needs a real Y-axis; the balance chart starts at $0 and the
   mouse wheel zooms its floor.
 - Nav order is Dashboard > Trends > Accounts > Manual (user-specified).
-  "Manual" holds both hand-entry paths -- Add a transaction and Paste a
-  statement -- as tabs; `/transactions/new` (without a review-queue
-  prefill) and `GET /import` redirect there.
+  "Manual" is the hand-entry form (cash, or anything the sync can't see);
+  `/transactions/new` and the old `/import` URLs redirect there.
 - "Living" comes first (and is the default) wherever Living/Total toggles
   appear. Toggles are full-width `.segmented` rows (CSS radio + `~`, no
   JS; per-id rules in `style.css`).
@@ -126,11 +125,12 @@ flowed). What keeps that safe:
 - Card payments seen from both checking and the card merge into one
   TRANSFER.
 
-Manual statement paste (`/import`, Gemini-parsed) still exists for
-accounts Plaid can't reach (Cash), and still goes through the
-`/import/review` queue. Anything before an account's
-`opening_balance_date` is ignored by both. (A Chrome capture extension
-existed before Plaid; it was removed.)
+Anything before an account's `opening_balance_date` is ignored. Two
+earlier import paths were removed once every bank account was on Plaid:
+a Chrome capture extension, and Gemini-parsed statement paste with a
+review queue (`PendingImport`; its empty `pending_imports` table is still
+in the db, unused). Both are in git history if a non-Plaid bank ever
+needs them.
 
 ## Security
 
@@ -161,7 +161,5 @@ them without asking:
 - On macOS there's a separate double-clickable launcher app installed in
   `~/Applications` (outside this repo) that starts the server and opens
   Chrome -- see `launch.command` for the script it's built from.
-- `anthropic` was in `requirements.txt` from the original scaffold but
-  unused; the statement-import feature uses `google-genai` (Gemini) instead,
-  since Gemini has a genuine ongoing free tier and Anthropic's API is
-  billed separately from a Claude Pro/Max subscription.
+- The app calls no LLM API. (`google-genai` was used by the removed
+  statement parser; `anthropic` was an unused scaffold leftover.)

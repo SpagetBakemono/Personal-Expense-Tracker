@@ -2,8 +2,5 @@
 {% block title %}{{ "Edit transaction" if txn else "Add transaction" }}{% endblock %}
 {% block content %}
 <h2>{{ "Edit transaction" if txn else "Add transaction" }}</h2>
-{% if pending_import_id %}
-<p class="empty" style="padding: 8px 0;">From your statement import -- review and adjust before saving.</p>
-{% endif %}
 {% include "_transaction_form.html" %}
 {% endblock %}

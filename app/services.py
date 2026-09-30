@@ -9,7 +9,7 @@ balance drifts out of sync after an edit or delete.
 """
 from collections import defaultdict
 from datetime import date, datetime, timedelta
-from decimal import Decimal, InvalidOperation
+from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from sqlalchemy import func, or_, select
@@ -21,7 +21,6 @@ from app.models import (
     Category,
     CategoryKind,
     ImportCapture,
-    PendingImport,
     ReimbursementStatus,
     Transaction,
     TransactionType,
@@ -88,36 +87,6 @@ def get_account_balance(db: Session, account: Account) -> Decimal:
         # Paying down a credit card reduces what's owed; landing in an
         # asset account increases what you have.
         balance += -t.amount if is_liability else t.amount
-
-    return balance
-
-
-def get_projected_balance(
-    db: Session, account: Account, candidates: list[PendingImport]
-) -> Decimal:
-    """Current confirmed balance plus the effect of not-yet-confirmed
-    import candidates that don't look like duplicates -- lets a caller
-    cross-check a bank-stated ending balance against what the app would
-    show if this batch were accepted as-is, before the user confirms
-    anything. Candidates never carry type TRANSFER (the statement parser
-    only ever emits expense/income), so this doesn't need the to_account
-    handling get_account_balance does."""
-    balance = get_account_balance(db, account)
-    is_liability = account.type == AccountType.CREDIT_CARD
-
-    for c in candidates:
-        if c.possible_duplicate:
-            continue
-        # Same rule as get_account_balance: a candidate dated before the
-        # opening-balance snapshot is already baked into that number --
-        # confirming it later will correctly have zero effect on the
-        # balance, so it shouldn't be projected to have one here either.
-        if c.date < account.opening_balance_date:
-            continue
-        if c.suggested_type == TransactionType.INCOME:
-            balance += -c.amount if is_liability else c.amount
-        elif c.suggested_type == TransactionType.EXPENSE:
-            balance += c.amount if is_liability else -c.amount
 
     return balance
 
@@ -495,115 +464,6 @@ def get_pending_reimbursements(db: Session, account_id: int | None = None) -> li
     return db.scalars(query).all()
 
 
-DUPLICATE_DATE_TOLERANCE_DAYS = 1
-
-
-def _looks_like_duplicate(db: Session, account_id: int, txn_date: date, amount: Decimal) -> bool:
-    """A pending/posted date can shift by a day between when you logged
-    something by hand and when the bank's statement settles it -- exact
-    date matching would miss real duplicates, so this allows a 1-day
-    window either side.
-
-    Checks confirmed Transactions and ANY PendingImport row -- active
-    (already sitting in the queue from an overlapping capture) or
-    discarded (you already decided about something like this before).
-    Either way this only ever flags the candidate for review; it must
-    never silently skip creating it. An earlier version skipped creation
-    outright on a discarded match, keyed on account+amount+date alone --
-    with no merchant check, that meant a handful of discarded rows (e.g.
-    a repeated $3 transit fare) could quietly block every future real
-    transaction that happened to share an amount and a nearby date,
-    forever, with the review queue just looking empty and no visible
-    sign why. A false "possible duplicate" flag is a minor annoyance;
-    a transaction that never appears at all is a much worse failure."""
-    window_start = txn_date - timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
-    window_end = txn_date + timedelta(days=DUPLICATE_DATE_TOLERANCE_DAYS)
-
-    existing_txn = db.scalar(
-        select(Transaction.id).where(
-            Transaction.account_id == account_id,
-            Transaction.amount == amount,
-            Transaction.date >= window_start,
-            Transaction.date <= window_end,
-        )
-    )
-    if existing_txn is not None:
-        return True
-
-    existing_pending = db.scalar(
-        select(PendingImport.id).where(
-            PendingImport.account_id == account_id,
-            PendingImport.amount == amount,
-            PendingImport.date >= window_start,
-            PendingImport.date <= window_end,
-        )
-    )
-    return existing_pending is not None
-
-
-def create_pending_imports(
-    db: Session, account_id: int, parsed: list[dict]
-) -> list[PendingImport]:
-    """Turns parsed {date, amount, merchant, type} dicts (see
-    app/import_parser.py) into PendingImport rows for the review queue,
-    flagging ones that look like they might already be logged by hand.
-    Tolerant of a parsed row being malformed (bad date/amount/type) --
-    skips just that row rather than failing the whole batch, since one bad
-    line out of dozens shouldn't block importing the rest."""
-    created = []
-    for row in parsed:
-        try:
-            txn_date = date.fromisoformat(row["date"]) if row.get("date") else date.today()
-            amount = Decimal(str(row["amount"]))
-            merchant = (row.get("merchant") or "").strip() or "(unknown)"
-            suggested_type = TransactionType(row.get("type", "expense"))
-        except (KeyError, ValueError, InvalidOperation, TypeError):
-            continue
-
-        pending = PendingImport(
-            date=txn_date,
-            amount=amount,
-            merchant=merchant,
-            suggested_type=suggested_type,
-            account_id=account_id,
-            possible_duplicate=_looks_like_duplicate(db, account_id, txn_date, amount),
-        )
-        db.add(pending)
-        created.append(pending)
-
-    db.commit()
-    return created
-
-
-def get_pending_imports(db: Session) -> list[PendingImport]:
-    return db.scalars(
-        select(PendingImport)
-        .where(PendingImport.discarded == False)  # noqa: E712
-        .order_by(PendingImport.date.desc())
-    ).all()
-
-
-def discard_pending_import(db: Session, pending_id: int) -> None:
-    """Soft delete -- the row stays (see PendingImport.discarded) so a
-    later re-capture of something matching it shows a possible_duplicate
-    flag instead of no signal at all."""
-    pending = db.get(PendingImport, pending_id)
-    if pending:
-        pending.discarded = True
-        db.commit()
-
-
-def clear_pending_imports(db: Session) -> int:
-    """Hard-deletes every PendingImport row, active or discarded -- a
-    full reset for when the queue (or its discard history) has become
-    more noise than signal, e.g. after a run of accidental re-captures.
-    Only ever touches this table; confirmed Transactions are never
-    affected. Returns the number of rows removed."""
-    count = db.query(PendingImport).delete()
-    db.commit()
-    return count
-
-
 def log_import_capture(
     db: Session,
     account_id: int,
@@ -622,10 +482,6 @@ def log_import_capture(
     db.add(capture)
     db.commit()
     return capture
-
-
-def get_last_import_capture(db: Session) -> ImportCapture | None:
-    return db.scalar(select(ImportCapture).order_by(ImportCapture.created_at.desc()).limit(1))
 
 
 DEFAULT_EXPENSE_CATEGORIES = [

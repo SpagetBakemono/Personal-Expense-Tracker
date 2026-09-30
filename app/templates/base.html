@@ -14,11 +14,7 @@
       <a href="/" {{ 'class=active' if _path == '/' }}>Dashboard</a>
       <a href="/trends" {{ 'class=active' if _path.startswith('/trends') }}>Trends</a>
       <a href="/accounts" {{ 'class=active' if _path.startswith('/accounts') }}>Accounts</a>
-      <a href="/manual" {{ 'class=active' if _path.startswith('/manual') or _path.startswith('/transactions') or _path.startswith('/import') }}>Manual</a>
-      {% set _pending_count = pending_import_count() %}
-      {# Bank transactions post automatically; this queue only holds
-         manual statement pastes, so the link only shows when needed. #}
-      {% if _pending_count > 0 %}<a href="/import/review">Review ({{ _pending_count }})</a>{% endif %}
+      <a href="/manual" {{ 'class=active' if _path.startswith('/manual') or _path.startswith('/transactions') }}>Manual</a>
     </nav>
   </header>
   <main class="container">

@@ -174,9 +174,7 @@ button:hover { opacity: 0.9; }
 
 .actions-col { text-align: right; }
 
-/* Durable "what did the last capture do" banner on /import/review --
-   neutral by default, tinted only once there's an actual balance
-   verdict to react to. */
+/* Bank-sync alert card (see _sync_alerts.html). */
 .capture-log { margin-bottom: 16px; }
 .capture-log.ok { border-color: var(--good); }
 .capture-log.mismatch { border-color: var(--danger); }
@@ -232,8 +230,6 @@ button:hover { opacity: 0.9; }
 }
 .segmented label:hover { background: var(--bg); }
 
-#man_add:checked ~ .segmented label[for="man_add"],
-#man_paste:checked ~ .segmented label[for="man_paste"],
 #dash_living:checked ~ .segmented label[for="dash_living"],
 #dash_total:checked ~ .segmented label[for="dash_total"],
 #exp_living:checked ~ .segmented label[for="exp_living"],
@@ -244,8 +240,6 @@ button:hover { opacity: 0.9; }
 #bal_week:checked ~ .segmented label[for="bal_week"],
 #bal_month:checked ~ .segmented label[for="bal_month"] { background: var(--accent); color: #ffffff; }
 
-#man_add:checked ~ [data-for="man_paste"],
-#man_paste:checked ~ [data-for="man_add"],
 #dash_living:checked ~ [data-for="dash_total"],
 #dash_total:checked ~ [data-for="dash_living"],
 #exp_living:checked ~ [data-for="exp_total"],
@@ -305,5 +299,5 @@ button:hover { opacity: 0.9; }
 
 .chart-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--muted); }
 
-/* Manual page: forms span the same width as the Add/Paste toggle above. */
-[data-for^="man_"] .form-card { max-width: none !important; }
+/* Manual page: the add form spans the content width. */
+.manual-form .form-card { max-width: none; }
