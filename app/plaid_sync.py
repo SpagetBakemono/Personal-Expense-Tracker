@@ -16,6 +16,8 @@ What stands in for a human reviewer:
 - After every sync the app's balance is compared with the bank's; a
   mismatch is shown on the Dashboard and Accounts page.
 """
+import threading
+import time
 from datetime import timedelta
 from decimal import Decimal
 
@@ -66,6 +68,12 @@ PLAID_CATEGORY_MAP = {
 # (e.g. Plaid needing a bank re-login) would just quietly stop importing.
 # In-memory is enough: every app launch re-syncs and rebuilds it.
 LAST_SYNC_ERRORS: dict[int, str] = {}
+
+_SYNC_LOCK = threading.Lock()
+
+# Plaid refreshes bank data a few times a day, so re-syncing more often
+# than this just repeats the same answer.
+SYNC_INTERVAL_HOURS = 4
 
 
 def _within(days: int, when):
@@ -286,10 +294,9 @@ def _apply_modified(db: Session, t: dict) -> None:
         row.amount, row.date, row.pending = t["amount"], t["date"], t["pending"]
 
 
-def _posted_balance(db: Session, account: Account) -> Decimal:
-    """The app's balance counting only posted transactions -- comparable
-    to the bank's posted ("current") balance, which excludes pending."""
-    balance = get_account_balance(db, account)
+def _pending_effects(db: Session, account: Account) -> list[Decimal]:
+    """How much each pending row moves this account's balance, exactly as
+    get_account_balance applied it."""
     is_liability = account.type == AccountType.CREDIT_CARD
     pending = db.scalars(
         select(Transaction).where(
@@ -298,16 +305,36 @@ def _posted_balance(db: Session, account: Account) -> Decimal:
             Transaction.date >= account.opening_balance_date,
         )
     ).all()
+    effects = []
     for t in pending:
-        # Undo exactly what get_account_balance applied for this row.
         if t.to_account_id == account.id:
             effect = -t.amount if is_liability else t.amount
         elif t.type == TransactionType.INCOME:
             effect = -t.amount if is_liability else t.amount
         else:  # EXPENSE, or TRANSFER out of this account
             effect = t.amount if is_liability else -t.amount
-        balance -= effect
-    return balance
+        effects.append(effect)
+    return effects
+
+
+def _posted_balance(db: Session, account: Account) -> Decimal:
+    """The app's balance counting only posted transactions -- comparable
+    to the bank's posted ("current") balance, which excludes pending."""
+    return get_account_balance(db, account) - sum(_pending_effects(db, account), Decimal(0))
+
+
+def _explained_by_settling(gap: Decimal, pending_effects: list[Decimal]) -> bool:
+    """True if the bank being ahead of Plaid's transaction feed explains
+    the gap: the bank's balance already counts some charges as posted that
+    the feed still lists as pending (seen with BofA MTA fares -- a $6 "mismatch"
+    that was two $3 fares). That resolves itself on a later sync, so it
+    isn't worth an alert."""
+    target = round(gap * 100)
+    reachable = {0}
+    for effect in pending_effects[:30]:  # a subset-sum; keep it bounded
+        cents = round(effect * 100)
+        reachable |= {r + cents for r in reachable}
+    return target in reachable
 
 
 def _apply_removed(db: Session, plaid_id: str) -> None:
@@ -369,7 +396,11 @@ def sync_plaid_account(db: Session, account: Account) -> int:
 
     bank_balance = get_balance(token, account.plaid_account_id)
     app_balance = _posted_balance(db, account)
-    matches = None if bank_balance is None else abs(app_balance - bank_balance) < Decimal("0.01")
+    matches = None
+    if bank_balance is not None:
+        matches = abs(app_balance - bank_balance) < Decimal("0.01") or _explained_by_settling(
+            bank_balance - app_balance, _pending_effects(db, account)
+        )
     log_import_capture(db, account.id, created, bank_balance, app_balance, matches)
     return created
 
@@ -406,7 +437,10 @@ def sync_account_recording_errors(db: Session, account: Account) -> str | None:
     """sync_plaid_account, but a failure is recorded (and returned)
     instead of raised -- one bank's problem shouldn't stop the others."""
     try:
-        sync_plaid_account(db, account)
+        # One sync at a time: the periodic thread and a "Sync now" click
+        # would otherwise both insert the same new transaction.
+        with _SYNC_LOCK:
+            sync_plaid_account(db, account)
     except Exception as e:  # SDK, network, or a token that won't decrypt
         db.rollback()
         LAST_SYNC_ERRORS[account.id] = describe_error(e)
@@ -416,9 +450,8 @@ def sync_account_recording_errors(db: Session, account: Account) -> str | None:
 
 
 def sync_all_linked_accounts() -> None:
-    """Run at app startup, in a background thread (so the page opens
-    immediately rather than waiting on Plaid). Uses its own session --
-    request sessions belong to request threads."""
+    """Syncs every linked account. Uses its own session -- request
+    sessions belong to request threads."""
     db = SessionLocal()
     try:
         accounts = db.scalars(
@@ -429,3 +462,11 @@ def sync_all_linked_accounts() -> None:
             print(f"[plaid] {account.name}: {'FAILED -- ' + error if error else 'synced'}", flush=True)
     finally:
         db.close()
+
+
+def sync_periodically() -> None:
+    """Background loop started at app launch: sync now, then every
+    SYNC_INTERVAL_HOURS for as long as the app keeps running."""
+    while True:
+        sync_all_linked_accounts()
+        time.sleep(SYNC_INTERVAL_HOURS * 3600)

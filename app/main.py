@@ -6,7 +6,7 @@ from fastapi.staticfiles import StaticFiles
 from starlette.middleware.trustedhost import TrustedHostMiddleware
 
 from app.database import Base, SessionLocal, engine
-from app.plaid_sync import sync_all_linked_accounts
+from app.plaid_sync import sync_periodically
 from app.routers import accounts, dashboard, imports, plaid_routes, transactions, trends
 from app.services import seed_default_categories
 
@@ -66,7 +66,7 @@ def on_startup():
     finally:
         db.close()
 
-    # Pull new bank transactions into the review queue on every launch.
+    # Post new bank transactions on launch and every few hours after.
     # Background thread so the page opens immediately instead of waiting
     # on Plaid; daemon so it never holds up shutdown.
-    threading.Thread(target=sync_all_linked_accounts, daemon=True).start()
+    threading.Thread(target=sync_periodically, daemon=True).start()

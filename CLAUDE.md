@@ -63,8 +63,8 @@ fix it in the same change that makes it stale.
 
 ## Importing transactions
 
-Plaid sync (`app/plaid_sync.py`, runs in a background thread on every
-launch plus a per-account "Sync now") posts straight to the ledger -- no
+Plaid sync (`app/plaid_sync.py`, runs in a background thread at launch
+and every `SYNC_INTERVAL_HOURS` after, plus a per-account "Sync now") posts straight to the ledger -- no
 review queue (the user found the queue too much work once real data
 flowed). What keeps that safe:
 - Every row a sync touches carries a unique `plaid_transaction_id` (or
@@ -83,6 +83,9 @@ flowed). What keeps that safe:
   when they post. After each sync, Plaid's *posted* balance is compared
   against the ledger minus pending rows; a mismatch or a failure shows in
   the red alerts banner on Dashboard and Accounts -- never fail silently.
+  Exception: a gap that some subset of pending rows exactly explains isn't
+  flagged -- the bank's balance often counts a charge as posted before
+  Plaid's feed stops calling it pending, and a later sync resolves it.
 - Card payments seen from both checking and the card merge into one
   TRANSFER.
 
