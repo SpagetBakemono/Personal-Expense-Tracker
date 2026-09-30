@@ -18,7 +18,7 @@ What stands in for a human reviewer:
 """
 import threading
 import time
-from datetime import timedelta
+from datetime import datetime, timedelta
 from decimal import Decimal
 
 from sqlalchemy import func, or_, select
@@ -74,6 +74,24 @@ _SYNC_LOCK = threading.Lock()
 # Plaid refreshes bank data a few times a day, so re-syncing more often
 # than this just repeats the same answer.
 SYNC_INTERVAL_HOURS = 4
+
+# A balance gap that lasts longer than this isn't a charge still settling.
+DRIFT_GRACE_DAYS = 3
+
+# Plaid errors only you can fix (by signing in to the bank again via
+# Link). Anything else -- network, rate limits, Plaid hiccups -- is
+# retried by the next periodic sync without bothering you.
+NEEDS_USER_ERRORS = {
+    "ITEM_LOGIN_REQUIRED",
+    "PENDING_EXPIRATION",
+    "PENDING_DISCONNECT",
+    "INVALID_CREDENTIALS",
+    "INVALID_MFA",
+    "ITEM_LOCKED",
+    "USER_SETUP_REQUIRED",
+    "ACCESS_NOT_GRANTED",
+    "NO_ACCOUNTS",
+}
 
 
 def _within(days: int, when):
@@ -406,31 +424,60 @@ def sync_plaid_account(db: Session, account: Account) -> int:
 
 
 def get_sync_alerts(db: Session) -> list[str]:
-    """Everything about bank sync that needs your attention, one line
-    each: failed syncs, and linked accounts whose balance disagrees with
-    the bank's after their latest sync. With no review queue, the balance
-    check is what catches a missed or doubled transaction."""
+    """Only what *you* have to fix: a bank asking you to sign in again.
+    The app's whole point is that syncing takes care of itself, so
+    everything else stays off the Dashboard -- a network blip just retries
+    on the next periodic sync, and a balance gap mid-settlement resolves
+    itself (see get_balance_drift for the persistent kind)."""
     alerts = []
-    # list() snapshots it -- the startup sync thread may be writing to it.
+    # list() snapshots it -- the sync thread may be writing to it.
     for account_id, error in list(LAST_SYNC_ERRORS.items()):
         account = db.get(Account, account_id)
-        if account:
-            alerts.append(f"{account.name}: sync failed -- {error}")
+        if account and error.split(":", 1)[0] in NEEDS_USER_ERRORS:
+            alerts.append(
+                f"{account.name} needs you to sign in to your bank again -- "
+                "Disconnect it on the Accounts page, then Connect it again."
+            )
+    return alerts
+
+
+def get_balance_drift(db: Session) -> list[str]:
+    """Linked accounts whose balance has disagreed with the bank on every
+    sync for DRIFT_GRACE_DAYS -- long enough that it isn't a charge still
+    settling, so a transaction really is missing or doubled. Shown quietly
+    on the Accounts page only."""
+    notes = []
+    cutoff = datetime.utcnow() - timedelta(days=DRIFT_GRACE_DAYS)
     for account in db.scalars(select(Account).where(Account.plaid_access_token.isnot(None))):
-        if account.id in LAST_SYNC_ERRORS:
-            continue
         last = db.scalar(
             select(ImportCapture)
             .where(ImportCapture.account_id == account.id)
             .order_by(ImportCapture.id.desc())
             .limit(1)
         )
-        if last and last.balance_matches is False:
-            alerts.append(
-                f"{account.name}: bank's posted balance is ${last.bank_balance:,.2f} but the "
-                f"app's is ${last.app_balance:,.2f} -- a transaction may be missing or doubled."
+        if not last or last.balance_matches is not False:
+            continue
+        last_good = db.scalar(
+            select(func.max(ImportCapture.created_at)).where(
+                ImportCapture.account_id == account.id, ImportCapture.balance_matches == True  # noqa: E712
             )
-    return alerts
+        )
+        if last_good is None or last_good < cutoff:
+            gap = abs(last.app_balance - last.bank_balance)
+            notes.append(
+                f"{account.name} has been ${gap:,.2f} off from the bank for over "
+                f"{DRIFT_GRACE_DAYS} days -- a transaction may be missing or doubled."
+            )
+    return notes
+
+
+def get_last_synced(db: Session) -> datetime | None:
+    """When bank data was last pulled for any linked account."""
+    return db.scalar(
+        select(func.max(ImportCapture.created_at))
+        .join(Account, Account.id == ImportCapture.account_id)
+        .where(Account.plaid_access_token.isnot(None))
+    )
 
 
 def sync_account_recording_errors(db: Session, account: Account) -> str | None:

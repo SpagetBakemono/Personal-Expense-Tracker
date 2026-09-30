@@ -8,8 +8,8 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Account, AccountType
-from app.plaid_sync import get_sync_alerts
-from app.services import get_all_balances
+from app.plaid_sync import get_balance_drift, get_last_synced, get_sync_alerts
+from app.services import get_all_balances, relative_time
 from app.templating import templates
 
 router = APIRouter()
@@ -18,10 +18,16 @@ router = APIRouter()
 @router.get("/accounts")
 def list_accounts(request: Request, db: Session = Depends(get_db)):
     balances = get_all_balances(db)
+    last_synced = get_last_synced(db)
     return templates.TemplateResponse(
         request,
         "accounts.html",
-        {"balances": balances, "sync_alerts": get_sync_alerts(db)},
+        {
+            "balances": balances,
+            "sync_alerts": get_sync_alerts(db),
+            "balance_drift": get_balance_drift(db),
+            "last_synced": relative_time(last_synced) if last_synced else None,
+        },
     )
 
 

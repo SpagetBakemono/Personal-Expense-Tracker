@@ -3,6 +3,9 @@
 {% block content %}
 <h2>Accounts</h2>
 {% include "_sync_alerts.html" %}
+{% for note in balance_drift %}
+<p class="stat-sub" style="margin: 0 0 8px;">{{ note }}</p>
+{% endfor %}
 {% if balances %}
 <table>
   <thead><tr><th>Name</th><th>Type</th><th>Opening balance</th><th>Balance</th><th>Bank sync</th><th></th></tr></thead>

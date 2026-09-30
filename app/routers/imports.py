@@ -1,5 +1,3 @@
-from datetime import datetime
-
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
 from sqlalchemy import select
@@ -15,24 +13,11 @@ from app.services import (
     get_last_import_capture,
     get_pending_imports,
     log_import_capture,
+    relative_time,
 )
 from app.templating import templates
 
 router = APIRouter()
-
-
-def _relative_time(dt: datetime) -> str:
-    seconds = (datetime.utcnow() - dt).total_seconds()
-    if seconds < 60:
-        return "just now"
-    minutes = int(seconds // 60)
-    if minutes < 60:
-        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
-    hours = int(minutes // 60)
-    if hours < 24:
-        return f"{hours} hour{'s' if hours != 1 else ''} ago"
-    days = int(hours // 24)
-    return f"{days} day{'s' if days != 1 else ''} ago"
 
 
 @router.get("/import")
@@ -92,7 +77,7 @@ def review_imports(request: Request, db: Session = Depends(get_db)):
             "pending": pending,
             "last_capture": last_capture,
             "last_capture_relative_time": (
-                _relative_time(last_capture.created_at) if last_capture else None
+                relative_time(last_capture.created_at) if last_capture else None
             ),
             "total_backlog": total_backlog,
         },

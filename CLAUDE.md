@@ -81,8 +81,13 @@ flowed). What keeps that safe:
   reconciled by hand.
 - Pending transactions post with `pending=True` and are updated in place
   when they post. After each sync, Plaid's *posted* balance is compared
-  against the ledger minus pending rows; a mismatch or a failure shows in
-  the red alerts banner on Dashboard and Accounts -- never fail silently.
+  against the ledger minus pending rows.
+- The user wants the app to run itself, not to babysit syncing: only
+  problems the user must fix (a bank asking to sign in again --
+  `NEEDS_USER_ERRORS`) get the red card on Dashboard/Accounts. Other sync
+  failures just retry next cycle. A balance gap shows only after it has
+  persisted `DRIFT_GRACE_DAYS`, as a quiet line on Accounts. Both pages
+  show "Bank data updated X ago" instead.
   Exception: a gap that some subset of pending rows exactly explains isn't
   flagged -- the bank's balance often counts a charge as posted before
   Plaid's feed stops calling it pending, and a later sync resolves it.

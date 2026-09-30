@@ -12,8 +12,9 @@ from app.services import (
     get_total_balance,
     get_trailing_average_expense,
     get_trailing_average_income,
+    relative_time,
 )
-from app.plaid_sync import get_sync_alerts
+from app.plaid_sync import get_last_synced, get_sync_alerts
 from app.templating import templates
 
 router = APIRouter()
@@ -73,6 +74,7 @@ def dashboard(
     )
 
     pending = get_pending_reimbursements(db, effective_account_id)
+    last_synced = get_last_synced(db)
 
     max_category = max(summary["by_category"].values()) if summary["by_category"] else 1
     max_category_living = (
@@ -103,6 +105,7 @@ def dashboard(
             "max_category": max_category,
             "max_category_living": max_category_living,
             "sync_alerts": get_sync_alerts(db),
+            "last_synced": relative_time(last_synced) if last_synced else None,
             "month_name": selected_month.strftime("%B %Y"),
             "month_value": selected_month.strftime("%Y-%m"),
             "prev_month_value": prev_month.strftime("%Y-%m"),

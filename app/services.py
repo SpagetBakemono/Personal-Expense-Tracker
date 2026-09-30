@@ -8,7 +8,7 @@ is fast enough, and it avoids an entire class of bugs where a stored
 balance drifts out of sync after an edit or delete.
 """
 from collections import defaultdict
-from datetime import date, timedelta
+from datetime import date, datetime, timedelta
 from decimal import Decimal, InvalidOperation
 
 from dateutil.relativedelta import relativedelta
@@ -710,3 +710,17 @@ def seed_default_categories(db: Session) -> None:
         if name not in existing:
             db.add(Category(name=name, kind="income"))
     db.commit()
+
+
+def relative_time(dt: datetime) -> str:
+    seconds = (datetime.utcnow() - dt).total_seconds()
+    if seconds < 60:
+        return "just now"
+    minutes = int(seconds // 60)
+    if minutes < 60:
+        return f"{minutes} minute{'s' if minutes != 1 else ''} ago"
+    hours = int(minutes // 60)
+    if hours < 24:
+        return f"{hours} hour{'s' if hours != 1 else ''} ago"
+    days = int(hours // 24)
+    return f"{days} day{'s' if days != 1 else ''} ago"
