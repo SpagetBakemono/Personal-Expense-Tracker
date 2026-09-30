@@ -57,9 +57,27 @@ fix it in the same change that makes it stale.
   `DEFAULT_INCOME_CATEGORIES` in `services.py`) -- no add-category UI yet.
   `seed_default_categories()` only inserts names that don't already exist,
   so adding to the list is safe to apply to an existing database.
-- The first 7 expense categories (by id) get a dedicated color in the
-  Trends "all categories" view; the rest fold into a shared "Other" bucket
-  (see `get_category_color_series` in `services.py`).
+- The first 7 categories of each kind (by id) get a dedicated color in
+  the Trends stacked charts (expense and income alike); the rest fold into
+  a shared "Other" bucket (see `get_category_color_series` in
+  `services.py`). The colors (`CATEGORY_COLOR_SLOTS`) come from the app's
+  palette family and passed the dataviz validator only for *adjacent*
+  slots -- so charts stack series in that fixed order, never sorted by
+  amount.
+
+## UI / charts
+
+- Palette: "Dark Green Tropical" -- navy `#13243B`, dark green `#153D35`,
+  green `#1D8B65`, teal `#2C9D90`, off-white `#F3F3F1` (tokens at the top
+  of `style.css`). User-chosen; don't swap it out.
+- Trends charts are drawn client-side by `app/static/charts.js` (plain
+  SVG, no chart library -- keep third-party JS out of an app holding bank
+  tokens). The route passes plain data via a `|tojson` script blob.
+  Every chart needs a real Y-axis; the balance chart starts at $0 and the
+  mouse wheel zooms its floor.
+- "Living" comes first (and is the default) wherever Living/Total toggles
+  appear. Toggles are full-width `.segmented` rows (CSS radio + `~`, no
+  JS; per-id rules in `style.css`).
 
 ## Importing transactions
 

@@ -1,104 +1,19 @@
 {% extends "base.html" %}
 {% block title %}Trends{% endblock %}
 
-{% macro category_chart(view) %}
-<div class="card trend-card">
-  <div class="trend-legend">
-    {% for item in view.legend %}
-    <div class="trend-legend-item"><span class="trend-swatch" style="background: {{ item.color }};"></span> {{ item.label }}</div>
-    {% endfor %}
-  </div>
-
-  <div class="trend-chart">
-    {% for d in view.data %}
-    <div class="trend-col">
-      <div class="trend-total">${{ "%.0f"|format(d.total) }}</div>
-      <div class="trend-bar-track">
-        {% for seg in d.segments %}
-        <div class="trend-seg {{ 'rounded-top' if seg.rounded_top else '' }}"
-             style="height: {{ (seg.amount / view.max_total * 100)|round(2) if view.max_total > 0 else 0 }}%; background: {{ seg.color }};"
-             title="{{ seg.label }}: ${{ '%.2f'|format(seg.amount) }}"></div>
-        {% endfor %}
-      </div>
-      <div class="trend-month-label">{{ d.month_label }}</div>
-    </div>
-    {% endfor %}
-  </div>
+{# One stacked-bar chart slot; app/static/charts.js draws into it from
+   the JSON blob at the bottom of the page. #}
+{% macro bar_chart(key, empty_text) %}
+<div class="card chart-card">
+  {% if charts[key].series %}
+  <div class="chart" data-chart="bars" data-key="{{ key }}"></div>
+  {% else %}
+  <p class="empty">{{ empty_text }}</p>
+  {% endif %}
 </div>
-{% endmacro %}
-
-{% macro living_summary_chart(view) %}
-<div class="card trend-card">
-  <div class="trend-legend">
-    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--danger);"></span> Living expenses</div>
-    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--good);"></span> Living income</div>
-  </div>
-  <div class="trend-chart">
-    {% for c in view.cols %}
-    <div class="trend-col">
-      <div class="grouped-bar-track">
-        <div class="grouped-bar expense" style="height: {{ c.expense_pct }}%;" title="Living expenses: ${{ '%.2f'|format(c.living_expenses) }}"></div>
-        <div class="grouped-bar income" style="height: {{ c.income_pct }}%;" title="Living income: ${{ '%.2f'|format(c.living_income) }}"></div>
-      </div>
-      <div class="trend-month-label">{{ c.month_label }}</div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
-
-<div class="card trend-card" style="margin-top: 16px;">
-  <div class="trend-legend">
-    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--good);"></span> Living net (positive)</div>
-    <div class="trend-legend-item"><span class="trend-swatch" style="background: var(--danger);"></span> Living net (negative)</div>
-  </div>
-  <div class="diverging-chart">
-    {% for c in view.cols %}
-    <div class="diverging-col">
-      <div class="diverging-track">
-        <div class="diverging-zero-line"></div>
-        {% if c.net_positive %}
-        <div class="diverging-bar positive" style="height: {{ c.net_half_pct }}%;" title="Living net: +${{ '%.2f'|format(c.living_net) }}"></div>
-        {% else %}
-        <div class="diverging-bar negative" style="height: {{ c.net_half_pct }}%;" title="Living net: -${{ '%.2f'|format(-c.living_net) }}"></div>
-        {% endif %}
-      </div>
-      <div class="trend-month-label">{{ c.month_label }}</div>
-    </div>
-    {% endfor %}
-  </div>
-</div>
-{% endmacro %}
-
-{% macro balance_chart(view, chart_w, chart_h) %}
-{% if not view.coords %}
-<p class="empty">Not enough history yet to chart a balance trend.</p>
-{% else %}
-<div class="card">
-  <p class="stat-label">Current balance</p>
-  <p class="stat-value {{ 'positive' if view.latest >= 0 else 'negative' }}" style="font-size: 28px;">
-    ${{ "%.2f"|format(view.latest) }}
-  </p>
-  <div class="balance-chart">
-    <svg viewBox="0 0 {{ chart_w }} {{ chart_h }}" preserveAspectRatio="none" class="balance-svg">
-      <path d="{{ view.area_path }}" class="balance-area"></path>
-      <path d="{{ view.line_path }}" class="balance-line"></path>
-      {% for c in view.coords %}
-      <circle cx="{{ c.x }}" cy="{{ c.y }}" r="3" class="balance-dot"><title>{{ c.tooltip }}</title></circle>
-      {% endfor %}
-    </svg>
-  </div>
-  <div class="balance-x-labels">
-    {% for lbl in view.x_labels %}
-    <span style="left: {{ (lbl.x / chart_w * 100)|round(2) }}%;">{{ lbl.text }}</span>
-    {% endfor %}
-  </div>
-</div>
-{% endif %}
 {% endmacro %}
 
 {% block content %}
-
-<h2>Spending trend</h2>
 
 <form class="filter-row" method="get" action="/trends">
   <div>
@@ -121,49 +36,52 @@
   <noscript><button type="submit">Update</button></noscript>
 </form>
 
-{% if not categories %}
-<p class="empty">No expense categories yet.</p>
-
-{% elif not view_all.legend and not view_living.legend %}
-<p class="empty">No expenses logged yet.</p>
-
-{% else %}
-
-<input type="radio" name="trend_scope" id="trend_scope_all" class="toggle-input" checked>
-<label for="trend_scope_all" class="toggle-btn">All spending</label>
-<input type="radio" name="trend_scope" id="trend_scope_living" class="toggle-input">
-<label for="trend_scope_living" class="toggle-btn">Living expenses</label>
-
-<div class="toggle-panel" data-for="trend_scope_all">
-  {{ category_chart(view_all) }}
+<h2>Spending{{ " -- " + selected_category.name if selected_category else "" }}</h2>
+<input type="radio" name="exp_scope" id="exp_living" class="toggle-input" checked>
+<input type="radio" name="exp_scope" id="exp_total" class="toggle-input">
+<div class="segmented">
+  <label for="exp_living">Living expenses</label>
+  <label for="exp_total">Total expenses</label>
 </div>
-<div class="toggle-panel" data-for="trend_scope_living">
-  {{ category_chart(view_living) }}
+<div class="toggle-panel" data-for="exp_living">{{ bar_chart("expense_living", "No living expenses in this range.") }}</div>
+<div class="toggle-panel" data-for="exp_total">{{ bar_chart("expense_total", "No expenses in this range.") }}</div>
+
+<h2>Income</h2>
+<input type="radio" name="inc_scope" id="inc_living" class="toggle-input" checked>
+<input type="radio" name="inc_scope" id="inc_total" class="toggle-input">
+<div class="segmented">
+  <label for="inc_living">Living income</label>
+  <label for="inc_total">Total income</label>
 </div>
-
-{% endif %}
-
-<h2>Living income vs. expenses</h2>
-
-{% if living_summary_view.cols %}
-{{ living_summary_chart(living_summary_view) }}
-{% else %}
-<p class="empty">No data yet for this range.</p>
-{% endif %}
+<div class="toggle-panel" data-for="inc_living">{{ bar_chart("income_living", "No living income in this range.") }}</div>
+<div class="toggle-panel" data-for="inc_total">{{ bar_chart("income_total", "No income in this range.") }}</div>
 
 <h2>Balance over time</h2>
-
-<input type="radio" name="bal_gran" id="bal_gran_day" class="toggle-input">
-<label for="bal_gran_day" class="toggle-btn">Daily</label>
-<input type="radio" name="bal_gran" id="bal_gran_week" class="toggle-input">
-<label for="bal_gran_week" class="toggle-btn">Weekly</label>
-<input type="radio" name="bal_gran" id="bal_gran_month" class="toggle-input" checked>
-<label for="bal_gran_month" class="toggle-btn">Monthly</label>
-
+<input type="radio" name="bal_gran" id="bal_day" class="toggle-input">
+<input type="radio" name="bal_gran" id="bal_week" class="toggle-input" checked>
+<input type="radio" name="bal_gran" id="bal_month" class="toggle-input">
+<div class="segmented">
+  {% for g, g_label in granularities %}
+  <label for="bal_{{ g }}">{{ g_label }}</label>
+  {% endfor %}
+</div>
 {% for g, g_label in granularities %}
-<div class="toggle-panel" data-for="bal_gran_{{ g }}">
-  {{ balance_chart(balance_views[g], balance_chart_w, balance_chart_h) }}
+<div class="toggle-panel" data-for="bal_{{ g }}">
+  <div class="card chart-card">
+    {% if charts["balance_" + g]|length > 1 %}
+    <div class="chart" data-chart="line" data-key="balance_{{ g }}"></div>
+    <div class="chart-foot">
+      <span>Scroll on the chart to zoom the scale</span>
+      <button type="button" class="btn-sm btn-sm-outline" data-reset-scale>Reset scale</button>
+    </div>
+    {% else %}
+    <p class="empty">Not enough history yet to chart a balance trend.</p>
+    {% endif %}
+  </div>
 </div>
 {% endfor %}
 
+{# |tojson escapes <, > and & -- safe inside a script element. #}
+<script type="application/json" id="chart-data">{{ charts|tojson }}</script>
+<script src="/static/charts.js?v={{ static_version('charts.js') }}"></script>
 {% endblock %}

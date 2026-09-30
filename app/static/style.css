@@ -1,16 +1,23 @@
+/* "Dark Green Tropical" palette: navy #13243B, dark green #153D35,
+   green #1D8B65, teal #2C9D90, off-white #F3F3F1. Navy carries the chrome
+   and text, green is the interactive accent, teal draws the balance line.
+   Category colors for the stacked Trends charts are derived from this
+   family and validated separately -- see CATEGORY_COLOR_SLOTS in
+   services.py. --danger stays a true red: it's a status color. */
 :root {
-  /* Chart/UI palette validated via the dataviz skill's palette.md
-     (light mode): chart surface, ink tokens, sequential blue for
-     single-series magnitude bars, status colors for positive/negative. */
-  --bg: #f9f9f7;
-  --surface: #fcfcfb;
-  --border: #e1e0d9;
-  --text: #0b0b0b;
-  --muted: #898781;
-  --secondary: #52514e;
-  --accent: #256abf;      /* sequential blue, step 500 */
-  --good: #0ca30c;        /* status: good */
-  --danger: #d03b3b;      /* status: critical */
+  --bg: #f3f3f1;
+  --surface: #ffffff;
+  --border: #dfe1dd;
+  --text: #13243b;
+  --muted: #6b7480;
+  --secondary: #3d4a5a;
+  --navy: #13243b;
+  --accent: #1d8b65;
+  --accent-strong: #153d35;
+  --chart-line: #2c9d90;
+  --grid: #eceeea;
+  --good: #1d8b65;
+  --danger: #c93b3b;
   --radius: 10px;
 }
 
@@ -28,22 +35,21 @@ body {
   align-items: center;
   justify-content: space-between;
   padding: 14px 24px;
-  background: var(--surface);
-  border-bottom: 1px solid var(--border);
+  background: var(--navy);
   position: sticky;
   top: 0;
   z-index: 20;
 }
 
-.brand { font-weight: 600; text-decoration: none; color: var(--text); }
+.brand { font-weight: 600; text-decoration: none; color: #ffffff; }
 
 .topbar nav a {
   margin-left: 18px;
   text-decoration: none;
-  color: var(--muted);
+  color: #b9c3cf;
   font-size: 14px;
 }
-.topbar nav a:hover { color: var(--text); }
+.topbar nav a:hover { color: #ffffff; }
 
 .container {
   max-width: 880px;
@@ -191,121 +197,104 @@ button:hover { opacity: 0.9; }
 .btn-sm-outline { background: transparent; color: var(--secondary); border: 1px solid var(--border); }
 .btn-sm-outline:hover { border-color: var(--muted); color: var(--text); }
 
-/* Segmented toggle (All/Living, Daily/Weekly/Monthly, ...): a hidden
-   radio per option plus its adjacent label styled as a pill, and a
-   `~` general-sibling rule per option hiding every panel that isn't
-   its own -- no JS needed. Radio and its panel(s) must stay flat
-   siblings (same parent) for the `~` combinator to reach them. */
+/* Toggles (Living/Total, Daily/Weekly/Monthly): CSS-only, no JS -- a
+   hidden radio per option, and a `~` general-sibling rule per option
+   hiding every panel that isn't its own. Radios and panels must stay
+   flat siblings (same parent) for `~` to reach them. */
 .toggle-input { display: none; }
-.toggle-btn {
-  display: inline-block;
-  padding: 6px 14px;
-  margin: 0 6px 14px 0;
-  font-size: 12px;
-  border-radius: 999px;
-  border: 1px solid var(--border);
+
+/* Full-width segmented control: the hidden radios come first, then a
+   .segmented row of their labels, then the panels -- all flat siblings,
+   so `#radio:checked ~ ...` reaches both the label row (to highlight the
+   chosen option) and the panels (to hide the others). */
+.segmented {
+  display: flex;
+  width: 100%;
+  margin: 0 0 12px;
+  padding: 3px;
+  gap: 3px;
   background: var(--surface);
-  color: var(--muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.segmented label {
+  flex: 1;
+  margin: 0;
+  padding: 7px 10px;
+  text-align: center;
+  font-size: 13px;
+  color: var(--secondary);
+  border-radius: 999px;
   cursor: pointer;
   user-select: none;
 }
-.toggle-input:checked + .toggle-btn { background: var(--accent); border-color: var(--accent); color: white; }
+.segmented label:hover { background: var(--bg); }
 
-#dash_scope_all:checked ~ [data-for="dash_scope_living"] { display: none; }
-#dash_scope_living:checked ~ [data-for="dash_scope_all"] { display: none; }
+#dash_living:checked ~ .segmented label[for="dash_living"],
+#dash_total:checked ~ .segmented label[for="dash_total"],
+#exp_living:checked ~ .segmented label[for="exp_living"],
+#exp_total:checked ~ .segmented label[for="exp_total"],
+#inc_living:checked ~ .segmented label[for="inc_living"],
+#inc_total:checked ~ .segmented label[for="inc_total"],
+#bal_day:checked ~ .segmented label[for="bal_day"],
+#bal_week:checked ~ .segmented label[for="bal_week"],
+#bal_month:checked ~ .segmented label[for="bal_month"] { background: var(--accent); color: #ffffff; }
 
-#trend_scope_all:checked ~ [data-for="trend_scope_living"] { display: none; }
-#trend_scope_living:checked ~ [data-for="trend_scope_all"] { display: none; }
+#dash_living:checked ~ [data-for="dash_total"],
+#dash_total:checked ~ [data-for="dash_living"],
+#exp_living:checked ~ [data-for="exp_total"],
+#exp_total:checked ~ [data-for="exp_living"],
+#inc_living:checked ~ [data-for="inc_total"],
+#inc_total:checked ~ [data-for="inc_living"],
+#bal_day:checked ~ [data-for="bal_week"],
+#bal_day:checked ~ [data-for="bal_month"],
+#bal_week:checked ~ [data-for="bal_day"],
+#bal_week:checked ~ [data-for="bal_month"],
+#bal_month:checked ~ [data-for="bal_day"],
+#bal_month:checked ~ [data-for="bal_week"] { display: none; }
 
-#bal_gran_day:checked ~ [data-for="bal_gran_week"],
-#bal_gran_day:checked ~ [data-for="bal_gran_month"] { display: none; }
-#bal_gran_week:checked ~ [data-for="bal_gran_day"],
-#bal_gran_week:checked ~ [data-for="bal_gran_month"] { display: none; }
-#bal_gran_month:checked ~ [data-for="bal_gran_day"],
-#bal_gran_month:checked ~ [data-for="bal_gran_week"] { display: none; }
-
-/* Trends: stacked bars-over-time, 1 to 8 segments depending on view
-   (one isolated category, or every category broken out) -- colors are
-   assigned per category in get_category_color_series() in services.py,
-   not here. */
-.filter-row { display: flex; gap: 12px; align-items: flex-end; margin-bottom: 20px; }
-.filter-row > div { min-width: 160px; }
+/* Trends */
+.filter-row { display: flex; flex-wrap: wrap; gap: 12px; align-items: flex-end; margin-bottom: 8px; }
+.filter-row > div { min-width: 160px; flex: 1; }
 .filter-row label { margin-bottom: 4px; }
 
-.trend-card { margin-bottom: 24px; }
+/* Charts drawn by app/static/charts.js. Axes and grid stay recessive;
+   text uses ink tokens, never a series color. */
+.chart-card { margin-bottom: 8px; }
+.chart { position: relative; width: 100%; min-height: 260px; }
+.chart-svg { display: block; overflow: visible; }
+.chart-svg .grid { stroke: var(--grid); stroke-width: 1; }
+.chart-svg .axis-base { stroke: var(--border); stroke-width: 1; }
+.chart-svg .axis-label { fill: var(--muted); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart-svg .bar-total { fill: var(--secondary); font-size: 11px; font-variant-numeric: tabular-nums; }
+.chart-svg .line-path { fill: none; stroke: var(--chart-line); stroke-width: 2; stroke-linejoin: round; stroke-linecap: round; }
+.chart-svg .line-area { fill: var(--chart-line); opacity: 0.1; }
+.chart-svg .line-end { fill: var(--chart-line); stroke: var(--surface); stroke-width: 2; }
+.chart-svg .line-dot { fill: var(--surface); stroke: var(--chart-line); stroke-width: 2; }
+.chart-svg .crosshair { stroke: var(--muted); stroke-width: 1; stroke-dasharray: 3 3; }
 
-.trend-legend { display: flex; gap: 18px; margin-bottom: 16px; font-size: 13px; color: var(--secondary); }
-.trend-legend-item { display: flex; align-items: center; gap: 6px; }
-.trend-swatch { width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
+.chart-legend { display: flex; flex-wrap: wrap; gap: 6px 16px; margin-bottom: 10px; font-size: 12px; color: var(--secondary); }
+.chart-legend-item { display: inline-flex; align-items: center; gap: 6px; }
+.chart-swatch { display: inline-block; width: 10px; height: 10px; border-radius: 2px; flex-shrink: 0; }
 
-.trend-chart {
-  display: flex;
-  align-items: flex-end;
-  gap: 16px;
-  height: 220px;
-  /* Top/bottom padding reserves room for the total label above the
-     tallest possible bar and a gap before the baseline below the shortest. */
-  padding: 14px 0 10px;
-  border-bottom: 1px solid var(--border);
-  /* Drag the bottom-right corner to resize -- bar heights are all
-     percentage-based (see .trend-bar-track), so they rescale live instead
-     of just changing how much empty space surrounds a fixed-size chart. */
-  resize: vertical;
-  overflow: auto;
-  min-height: 140px;
-}
-.trend-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; justify-content: flex-end; }
-.trend-total { font-size: 12px; color: var(--text); font-variant-numeric: tabular-nums; margin-bottom: 6px; white-space: nowrap; }
-/* flex:1 + min-height:0 (not a fixed px height) so the track fills
-   whatever room .trend-chart currently has, including after a resize;
-   gap (not margin) so the 2px surface separator works the same whether
-   there's 1 segment (isolated category) or up to 8 (all-categories view). */
-.trend-bar-track { width: 22px; flex: 1 1 0; min-height: 0; display: flex; flex-direction: column-reverse; gap: 2px; }
-.trend-seg.rounded-top { border-radius: 4px 4px 0 0; }
-.trend-month-label { font-size: 11px; color: var(--muted); margin-top: 8px; white-space: nowrap; }
-
-/* Living expenses vs income: two independent bars side by side (not
-   stacked) sharing one scale, sitting inside the same .trend-chart /
-   .trend-col scaffold as the category chart above. */
-.grouped-bar-track { width: 22px; flex: 1 1 0; min-height: 0; display: flex; flex-direction: row; align-items: flex-end; justify-content: center; gap: 3px; }
-.grouped-bar { width: 9px; border-radius: 3px 3px 0 0; }
-.grouped-bar.expense { background: var(--danger); }
-.grouped-bar.income { background: var(--good); }
-
-/* Living net: a single bar per month that can go either way, so it gets
-   its own zero-anchored track instead of growing up from a bottom
-   baseline -- a positive month's bar sits above the line, a negative
-   month's below it, each scaled 0-50% (half the track) against the same
-   max magnitude so the two directions are visually comparable. */
-.diverging-chart {
-  display: flex;
-  gap: 16px;
-  height: 140px;
-  padding: 6px 0;
-  border-bottom: 1px solid var(--border);
-  resize: vertical;
-  overflow: auto;
-  min-height: 100px;
-}
-.diverging-col { flex: 1; display: flex; flex-direction: column; align-items: center; min-width: 0; height: 100%; }
-.diverging-track { position: relative; flex: 1 1 0; min-height: 0; width: 22px; }
-.diverging-zero-line { position: absolute; top: 50%; left: 0; right: 0; height: 1px; background: var(--border); }
-.diverging-bar { position: absolute; left: 0; right: 0; border-radius: 3px; }
-.diverging-bar.positive { bottom: 50%; background: var(--good); border-radius: 3px 3px 0 0; }
-.diverging-bar.negative { top: 50%; background: var(--danger); border-radius: 0 0 3px 3px; }
-
-.balance-chart { width: 100%; }
-.balance-svg { width: 100%; height: 180px; display: block; }
-.balance-line { fill: none; stroke: var(--accent); stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
-.balance-area { fill: var(--accent); opacity: 0.12; stroke: none; }
-.balance-dot { fill: var(--surface); stroke: var(--accent); stroke-width: 1.5; transition: r 0.12s; }
-.balance-dot:hover { r: 5; }
-.balance-x-labels { position: relative; height: 16px; margin-top: 6px; }
-.balance-x-labels span {
+.chart-tip {
+  display: none;
   position: absolute;
-  top: 0;
-  transform: translateX(-50%);
-  font-size: 11px;
-  color: var(--muted);
-  white-space: nowrap;
+  z-index: 5;
+  pointer-events: none;
+  min-width: 170px;
+  padding: 8px 10px;
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  box-shadow: 0 4px 16px rgba(19, 36, 59, 0.12);
+  font-size: 12px;
+  color: var(--text);
+  font-variant-numeric: tabular-nums;
 }
+.chart-tip .tip-head { font-weight: 600; margin-bottom: 4px; }
+.chart-tip .tip-row { display: flex; align-items: center; gap: 6px; padding: 1px 0; color: var(--secondary); }
+.chart-tip .tip-row b { margin-left: auto; padding-left: 12px; color: var(--text); font-weight: 600; }
+.chart-tip .tip-total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
+
+.chart-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--muted); }

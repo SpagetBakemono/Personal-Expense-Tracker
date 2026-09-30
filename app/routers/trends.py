@@ -1,5 +1,4 @@
 from datetime import date
-from decimal import Decimal
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, Request
@@ -8,21 +7,13 @@ from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Category, CategoryKind, Transaction, TransactionType
-from app.services import (
-    get_balance_history,
-    get_category_color_series,
-    get_monthly_all_categories_trend,
-    get_monthly_living_summary_trend,
-    get_monthly_single_category_trend,
-)
+from app.services import get_balance_history, get_monthly_category_trend
 from app.templating import templates
 
 router = APIRouter()
 
 MAX_MONTHS = 36  # keeps the chart from rendering hundreds of unreadable bars
 
-BALANCE_CHART_W = 640
-BALANCE_CHART_H = 160
 GRANULARITIES = [("day", "Daily"), ("week", "Weekly"), ("month", "Monthly")]
 
 
@@ -34,159 +25,6 @@ def _parse_month(value: str | None) -> date | None:
         return date(int(year), int(month), 1)
     except (ValueError, TypeError):
         return None
-
-
-def _category_trend_view(
-    db: Session,
-    selected_category_id: int | None,
-    selected_category: Category | None,
-    start_month: date,
-    months: int,
-    living_only: bool,
-) -> dict:
-    """Shared by the "All spending" and "Living expenses" toggle panels --
-    same {data, legend, max_total} shape either way, just filtered
-    differently, so the template renders both with one macro-like block."""
-    if selected_category_id is not None:
-        # Isolated: just this category's own trend, no comparison against
-        # everything else -- shares the same {month_label, segments,
-        # total} shape as the all-categories view below so the template
-        # doesn't need two different chart-rendering branches.
-        raw = get_monthly_single_category_trend(
-            db, selected_category_id, start_month, months, living_only=living_only
-        )
-        color_series = get_category_color_series(db)
-        color = next(
-            (s["color"] for s in color_series if selected_category_id in s["category_ids"]),
-            "#256abf",
-        )
-        data = [
-            {
-                "month_label": d["month_label"],
-                "segments": [
-                    {
-                        "label": selected_category.name,
-                        "color": color,
-                        "amount": d["amount"],
-                        "rounded_top": True,
-                    }
-                ],
-                "by_label": {selected_category.name: d["amount"]},
-                "total": d["amount"],
-            }
-            for d in raw
-        ]
-        legend = [{"label": selected_category.name, "color": color}] if data else []
-    else:
-        data, legend = get_monthly_all_categories_trend(
-            db, start_month, months, living_only=living_only
-        )
-    max_total = max((d["total"] for d in data), default=Decimal(0))
-    return {"data": data, "legend": legend, "max_total": max_total}
-
-
-def _living_summary_view(db: Session, start_month: date, months: int) -> dict:
-    """Geometry for two small charts: grouped Living Expenses/Income bars
-    (both always non-negative, sharing one scale) and a diverging Living
-    Net bar (can go negative, so it needs its own zero-anchored scale --
-    a bar above the line for a positive month, below for a negative one).
-    Percentages, not px, so the bars rescale if the surrounding card is
-    resized (same technique as the category trend chart)."""
-    rows = get_monthly_living_summary_trend(db, start_month, months)
-
-    max_pos = max(
-        [r["living_expenses"] for r in rows] + [r["living_income"] for r in rows] + [Decimal(0)]
-    )
-    max_abs_net = max([abs(r["living_net"]) for r in rows] + [Decimal(0)])
-
-    cols = []
-    for r in rows:
-        cols.append(
-            {
-                "month_label": r["month_label"],
-                "living_expenses": r["living_expenses"],
-                "living_income": r["living_income"],
-                "living_net": r["living_net"],
-                "expense_pct": round(float(r["living_expenses"] / max_pos * 100), 2)
-                if max_pos > 0
-                else 0,
-                "income_pct": round(float(r["living_income"] / max_pos * 100), 2)
-                if max_pos > 0
-                else 0,
-                # Half-scale (0-50) since this bar only ever occupies one
-                # side of the diverging chart's zero line -- the other 50
-                # belongs to the opposite sign.
-                "net_half_pct": round(float(abs(r["living_net"]) / max_abs_net * 50), 2)
-                if max_abs_net > 0
-                else 0,
-                "net_positive": r["living_net"] >= 0,
-            }
-        )
-    return {"cols": cols}
-
-
-def _balance_chart_view(db: Session, start: date, end: date, granularity: str) -> dict:
-    """Line-chart geometry for one granularity, pre-computed in Python so
-    the template just draws points -- an SVG viewBox of fixed
-    BALANCE_CHART_W x BALANCE_CHART_H, coordinates scaled to the actual
-    min/max balance in range."""
-    points = get_balance_history(db, start, end, granularity)
-    if not points:
-        return {
-            "granularity": granularity,
-            "coords": [],
-            "line_path": "",
-            "area_path": "",
-            "latest": None,
-            "x_labels": [],
-        }
-
-    values = [p["balance"] for p in points]
-    min_v, max_v = min(values), max(values)
-    n = len(points)
-    flat = max_v == min_v
-
-    coords = []
-    for i, p in enumerate(points):
-        x = (i / (n - 1) * BALANCE_CHART_W) if n > 1 else BALANCE_CHART_W / 2
-        if flat:
-            y = BALANCE_CHART_H / 2
-        else:
-            y = BALANCE_CHART_H - float((p["balance"] - min_v) / (max_v - min_v)) * BALANCE_CHART_H
-        coords.append(
-            {
-                "x": round(x, 1),
-                "y": round(y, 1),
-                "tooltip": f"{p['date'].strftime('%b %d, %Y')}: ${p['balance']:.2f}",
-            }
-        )
-
-    line_path = "M " + " L ".join(f"{c['x']},{c['y']}" for c in coords)
-    area_path = (
-        line_path + f" L {coords[-1]['x']},{BALANCE_CHART_H} L {coords[0]['x']},{BALANCE_CHART_H} Z"
-    )
-
-    # At most 6 x-axis labels, evenly spaced by index -- always including
-    # the first and last point, however many total points there are.
-    label_count = min(6, n)
-    label_indices = (
-        sorted({round(i * (n - 1) / (label_count - 1)) for i in range(label_count)})
-        if label_count > 1
-        else [0]
-    )
-    date_fmt = "%b %Y" if granularity == "month" else "%b %d"
-    x_labels = [
-        {"x": coords[i]["x"], "text": points[i]["date"].strftime(date_fmt)} for i in label_indices
-    ]
-
-    return {
-        "granularity": granularity,
-        "coords": coords,
-        "line_path": line_path,
-        "area_path": area_path,
-        "latest": points[-1]["balance"],
-        "x_labels": x_labels,
-    }
 
 
 @router.get("/trends")
@@ -232,18 +70,25 @@ def trends(
         start_month = end_month - relativedelta(months=MAX_MONTHS - 1)
         months = MAX_MONTHS
 
-    view_all = _category_trend_view(
-        db, selected_category_id, selected_category, start_month, months, living_only=False
-    )
-    view_living = _category_trend_view(
-        db, selected_category_id, selected_category, start_month, months, living_only=True
-    )
+    # Plain data for app/static/charts.js, which draws the axes, bars and
+    # tooltips client-side. Living first everywhere: it's the view the
+    # user reads first, Total is the drill-out.
+    def stacked(kind, living_only, category_id=None):
+        return get_monthly_category_trend(
+            db, start_month, months, kind=kind, living_only=living_only, category_id=category_id
+        )
 
-    living_summary_view = _living_summary_view(db, start_month, months)
-
-    balance_views = {
-        g: _balance_chart_view(db, start_month, end_month, g) for g, _ in GRANULARITIES
+    charts = {
+        "expense_living": stacked(CategoryKind.EXPENSE, True, selected_category_id),
+        "expense_total": stacked(CategoryKind.EXPENSE, False, selected_category_id),
+        "income_living": stacked(CategoryKind.INCOME, True),
+        "income_total": stacked(CategoryKind.INCOME, False),
     }
+    for g, _ in GRANULARITIES:
+        charts[f"balance_{g}"] = [
+            {"date": p["date"].isoformat(), "balance": float(p["balance"])}
+            for p in get_balance_history(db, start_month, end_month, g)
+        ]
 
     return templates.TemplateResponse(
         request,
@@ -254,12 +99,7 @@ def trends(
             "selected_category": selected_category,
             "start_value": start_month.strftime("%Y-%m"),
             "end_value": end_month.strftime("%Y-%m"),
-            "view_all": view_all,
-            "view_living": view_living,
-            "living_summary_view": living_summary_view,
-            "balance_views": balance_views,
+            "charts": charts,
             "granularities": GRANULARITIES,
-            "balance_chart_w": BALANCE_CHART_W,
-            "balance_chart_h": BALANCE_CHART_H,
         },
     )

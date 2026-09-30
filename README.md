@@ -52,9 +52,10 @@ underlying script if setting that up again.
   trailing-average "typical month" figure. Spending by category, account
   balances, pending reimbursements, recent transactions. Filterable to a
   single account.
-- **Trends** (`/trends`): a category's spend over a custom date range,
-  either isolated (just that category) or broken out across every category
-  at once with a fixed, validated color per category.
+- **Trends** (`/trends`): monthly spending and income as stacked bars by
+  category (Living or Total, with a Y-axis and hover breakdown), plus
+  total balance over time (daily/weekly/monthly; the axis starts at $0,
+  scroll on the chart to zoom in). Filterable by category and date range.
 - **Bank sync via Plaid**: link an account from the Accounts page ("Connect
   with Plaid"); new transactions post to the ledger automatically every
   time the app launches (plus a per-account "Sync now"), auto-categorized

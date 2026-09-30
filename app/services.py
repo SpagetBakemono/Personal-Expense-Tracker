@@ -27,19 +27,23 @@ from app.models import (
     TransactionType,
 )
 
-# Dataviz-skill validated 8-hue categorical palette (light mode), adjacent-pair
-# order -- see app/static/style.css's palette note. Used only for the
-# multi-category trend chart; the single-category highlight view keeps its
-# existing accent/gray 2-color scheme.
+# Category colors for the stacked trend charts, derived from the app's
+# "Dark Green Tropical" palette (navy / teal / green family, see style.css):
+# the palette's own teal and green plus cool neighbors at usable
+# lightness. Validated with the dataviz skill's validate_palette.js on the
+# #FFFFFF chart surface -- all checks pass for *adjacent* slots, which is
+# why the charts stack series in this fixed order. The lime and lavender
+# are under 3:1 against white, so bars always carry hover tooltips and a
+# labeled legend.
 CATEGORY_COLOR_SLOTS = [
-    "#2a78d6",  # blue
-    "#eb6834",  # orange
-    "#1baf7a",  # aqua
-    "#eda100",  # yellow
-    "#e87ba4",  # magenta
-    "#008300",  # green
-    "#4a3aa7",  # violet
-    "#e34948",  # red -- reserved for the "Other" fold-bucket, below
+    "#0d5c91",  # deep blue (palette navy, lifted)
+    "#2C9D90",  # palette teal
+    "#5c39b5",  # indigo
+    "#77b30e",  # lime
+    "#0e78e4",  # bright blue
+    "#1D8B65",  # palette green
+    "#9e8bf7",  # lavender
+    "#4a620b",  # olive -- the "Other" fold-bucket, below
 ]
 
 
@@ -196,51 +200,14 @@ def get_month_summary(
     }
 
 
-def get_monthly_single_category_trend(
-    db: Session, category_id: int, start: date, months: int, living_only: bool = False
-) -> list[dict]:
-    """Monthly expense totals for a single category, isolated -- no
-    comparison against other spending. For drilling into one category's
-    trend on its own (see get_monthly_all_categories_trend for the
-    everything-broken-out view instead)."""
-    end = start + relativedelta(months=months)
-    query = select(Transaction).where(
-        Transaction.date >= start,
-        Transaction.date < end,
-        Transaction.type == TransactionType.EXPENSE,
-        Transaction.category_id == category_id,
-    )
-    if living_only:
-        query = query.where(Transaction.exclude_from_living == False)  # noqa: E712
-    txns = db.scalars(query).all()
-
-    buckets = {}
-    for i in range(months):
-        m = start + relativedelta(months=i)
-        buckets[(m.year, m.month)] = Decimal(0)
-
-    for t in txns:
-        key = (t.date.year, t.date.month)
-        if key in buckets:
-            buckets[key] += t.amount
-
-    result = []
-    for i in range(months):
-        m = start + relativedelta(months=i)
-        result.append({"month_label": m.strftime("%b %Y"), "amount": buckets[(m.year, m.month)]})
-    return result
-
-
-def get_category_color_series(db: Session) -> list[dict]:
-    """Fixed {label, color, category_ids} assignment for the multi-category
-    trend chart: the first 7 expense categories (by id, i.e. creation order)
-    get a dedicated hue from the validated 8-hue categorical palette; every
-    other expense category folds into a shared "Other" bucket on the 8th
-    hue. Fixed by category id, never by how much each spent, so a
-    category's color never changes when the visible time range does."""
-    categories = db.scalars(
-        select(Category).where(Category.kind == CategoryKind.EXPENSE).order_by(Category.id)
-    ).all()
+def get_category_color_series(db: Session, kind: CategoryKind = CategoryKind.EXPENSE) -> list[dict]:
+    """Fixed {label, color, category_ids} assignment for the stacked trend
+    charts: the first 7 categories of `kind` (by id, i.e. creation order)
+    get a dedicated hue from CATEGORY_COLOR_SLOTS; every other category of
+    that kind folds into a shared "Other" bucket on the 8th. Fixed by
+    category id, never by how much each spent, so a category's color never
+    changes when the visible time range does."""
+    categories = db.scalars(select(Category).where(Category.kind == kind).order_by(Category.id)).all()
 
     series = [
         {"label": c.name, "color": CATEGORY_COLOR_SLOTS[i], "category_ids": {c.id}}
@@ -257,104 +224,56 @@ def get_category_color_series(db: Session) -> list[dict]:
     return series
 
 
-def get_monthly_all_categories_trend(
-    db: Session, start: date, months: int, living_only: bool = False
-) -> tuple[list[dict], list[dict]]:
-    """Per-month expense totals broken out by category (see
-    get_category_color_series), for the "All categories" trend view --
-    every dollar is attributed to its actual category's color instead of
-    being lumped into one undifferentiated total. Returns (data, legend):
-    legend is in a fixed category order for consistent labeling; each
-    month's own segments are ordered by that month's amounts instead
-    (largest at the bottom of the stack), which the legend deliberately
-    does not follow -- legend order should stay put while values change."""
+def get_monthly_category_trend(
+    db: Session,
+    start: date,
+    months: int,
+    kind: CategoryKind = CategoryKind.EXPENSE,
+    living_only: bool = False,
+    category_id: int | None = None,
+) -> dict:
+    """Per-month totals broken out by category, shaped for the stacked bar
+    charts on Trends: {months: [label, ...], series: [{label, color,
+    values: [float per month]}]}. Series stay in the fixed legend order and
+    the chart stacks them in that same order every month -- the
+    categorical palette is only validated for *that* adjacency, so sorting
+    a month's stack by size would put untested color pairs side by side.
+    Only series with money somewhere in the range are returned.
+
+    `category_id` narrows to a single category (the "Highlight category"
+    filter). Uncategorized transactions count toward "Other" -- otherwise a
+    month's bar would silently come up short of the Dashboard's total."""
     end = start + relativedelta(months=months)
-    series = get_category_color_series(db)
-    series_index_by_category_id = {
-        cid: idx for idx, s in enumerate(series) for cid in s["category_ids"]
-    }
+    txn_type = TransactionType.EXPENSE if kind == CategoryKind.EXPENSE else TransactionType.INCOME
+    series = get_category_color_series(db, kind)
+    index_by_category_id = {cid: idx for idx, s in enumerate(series) for cid in s["category_ids"]}
+    other_idx = next((i for i, s in enumerate(series) if s["label"] in ("Other", "Other Income")), None)
 
     query = select(Transaction).where(
-        Transaction.date >= start,
-        Transaction.date < end,
-        Transaction.type == TransactionType.EXPENSE,
+        Transaction.date >= start, Transaction.date < end, Transaction.type == txn_type
     )
     if living_only:
         query = query.where(Transaction.exclude_from_living == False)  # noqa: E712
-    txns = db.scalars(query).all()
+    if category_id is not None:
+        query = query.where(Transaction.category_id == category_id)
 
-    buckets = {}
-    for i in range(months):
-        m = start + relativedelta(months=i)
-        buckets[(m.year, m.month)] = [Decimal(0)] * len(series)
+    month_starts = [start + relativedelta(months=i) for i in range(months)]
+    position = {(m.year, m.month): i for i, m in enumerate(month_starts)}
+    values = [[Decimal(0)] * months for _ in series]
+    for t in db.scalars(query):
+        idx = index_by_category_id.get(t.category_id, other_idx)
+        col = position.get((t.date.year, t.date.month))
+        if idx is not None and col is not None:
+            values[idx][col] += t.amount
 
-    for t in txns:
-        key = (t.date.year, t.date.month)
-        if key not in buckets:
-            continue
-        idx = series_index_by_category_id.get(t.category_id)
-        if idx is None:
-            continue
-        buckets[key][idx] += t.amount
-
-    # Only series with spend somewhere in the range get a legend entry --
-    # keeps an idle category from cluttering the chart -- but which
-    # slot/color each one gets is fixed above and stays fixed here; this
-    # order is for the *legend* only, not how a given month's bar stacks.
-    active = [i for i in range(len(series)) if any(buckets[k][i] > 0 for k in buckets)]
-    legend = [{"label": series[i]["label"], "color": series[i]["color"]} for i in active]
-
-    result = []
-    for i in range(months):
-        m = start + relativedelta(months=i)
-        b = buckets[(m.year, m.month)]
-        # Largest amount at the bottom of the stack, smallest at the top --
-        # per-month, independent of the legend's fixed order, since the
-        # point here is "what dominated this month," not identity order.
-        month_order = sorted((idx for idx in active if b[idx] > 0), key=lambda idx: -b[idx])
-        segments = [
-            {
-                "label": series[idx]["label"],
-                "color": series[idx]["color"],
-                "amount": b[idx],
-                "rounded_top": idx == month_order[-1] if month_order else False,
-            }
-            for idx in month_order
-        ]
-        result.append(
-            {
-                "month_label": m.strftime("%b %Y"),
-                "segments": segments,
-                # Stable, legend-order lookup for the table view -- unlike
-                # `segments` above, a table's columns can't reorder row to
-                # row and still be readable.
-                "by_label": {series[idx]["label"]: b[idx] for idx in active},
-                "total": sum(b, Decimal(0)),
-            }
-        )
-    return result, legend
-
-
-def get_monthly_living_summary_trend(db: Session, start: date, months: int) -> list[dict]:
-    """Per-month {living_expenses, living_income, living_net} over a
-    range -- reuses get_month_summary's living-only aggregation one
-    month at a time (fine at personal-ledger scale) for the Trends
-    "Living income vs expenses" and "Living net" charts, which show the
-    same living-scoped figures as the dashboard but across many months
-    instead of just the current one."""
-    result = []
-    for i in range(months):
-        m = start + relativedelta(months=i)
-        s = get_month_summary(db, m.year, m.month)
-        result.append(
-            {
-                "month_label": m.strftime("%b %Y"),
-                "living_expenses": s["living_expenses"],
-                "living_income": s["living_income"],
-                "living_net": s["living_net"],
-            }
-        )
-    return result
+    return {
+        "months": [m.strftime("%b %Y") for m in month_starts],
+        "series": [
+            {"label": s["label"], "color": s["color"], "values": [float(v) for v in values[i]]}
+            for i, s in enumerate(series)
+            if any(values[i])
+        ],
+    }
 
 
 MAX_BALANCE_POINTS = 120
