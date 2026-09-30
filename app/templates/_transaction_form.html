@@ -64,7 +64,10 @@
   </div>
 
   <div id="exclude_from_living_field">
-    <label><input type="checkbox" name="exclude_from_living" value="1" {{ "checked" if txn and txn.exclude_from_living else "" }} style="width:auto;display:inline-block;" /> <span id="exclude_from_living_label">Not a living expense (tuition, a deposit, etc. -- excluded from Living Expenses)</span></label>
+    {# Positive wording on purpose: "tick = counts as living". It used to
+       be a "Not a living ..." box, and unticking it to mean "not living"
+       did the opposite. Stored inverted as exclude_from_living. #}
+    <label><input type="checkbox" name="counts_as_living" value="1" {{ "" if txn and txn.exclude_from_living else "checked" }} style="width:auto;display:inline-block;" /> <span id="exclude_from_living_label">Counts as a living expense</span></label>
   </div>
 
   <button type="submit">{{ "Save changes" if txn else "Save" }}</button>
@@ -85,8 +88,8 @@ function toggleFields() {
   document.getElementById('reimbursable_field').style.display = (type === 'expense') ? 'block' : 'none';
   document.getElementById('exclude_from_living_field').style.display = (type === 'transfer') ? 'none' : 'block';
   document.getElementById('exclude_from_living_label').textContent = (type === 'income')
-    ? 'Not regular living income (a deposit refund, a one-off reimbursement, etc. -- excluded from Living Expenses)'
-    : 'Not a living expense (tuition, a deposit, etc. -- excluded from Living Expenses)';
+    ? 'Counts as living income (untick for one-offs like a reimbursement or a deposit refund)'
+    : 'Counts as a living expense (untick for one-offs like tuition or a deposit)';
 }
 toggleFields();
 </script>
