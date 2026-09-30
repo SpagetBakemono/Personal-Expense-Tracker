@@ -15,15 +15,16 @@ from app.services import (
     log_import_capture,
     relative_time,
 )
+from app.routers.transactions import manual_page
 from app.templating import templates
 
 router = APIRouter()
 
 
 @router.get("/import")
-def import_form(request: Request, db: Session = Depends(get_db)):
-    accounts = db.scalars(select(Account).order_by(Account.name)).all()
-    return templates.TemplateResponse(request, "import_new.html", {"accounts": accounts})
+def import_form():
+    # Statement paste lives on the Manual page's second tab now.
+    return RedirectResponse(url="/manual?tab=paste", status_code=303)
 
 
 @router.post("/import")
@@ -33,14 +34,8 @@ def parse_import(
     statement_text: str = Form(...),
     db: Session = Depends(get_db),
 ):
-    accounts = db.scalars(select(Account).order_by(Account.name)).all()
-
     if not statement_text.strip():
-        return templates.TemplateResponse(
-            request,
-            "import_new.html",
-            {"accounts": accounts, "error": "Paste some statement text first."},
-        )
+        return manual_page(request, db, "paste", "Paste some statement text first.")
 
     try:
         parsed = parse_statement_text(statement_text)
@@ -50,11 +45,7 @@ def parse_import(
         # the error instead of a blank 500, since there's nothing the
         # user can do about a crash but they can retry after seeing why
         # it failed.
-        return templates.TemplateResponse(
-            request,
-            "import_new.html",
-            {"accounts": accounts, "error": f"Couldn't parse that: {e}"},
-        )
+        return manual_page(request, db, "paste", f"Couldn't parse that: {e}")
 
     created = create_pending_imports(db, account_id, parsed["transactions"])
     log_import_capture(db, account_id, len(created))

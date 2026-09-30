@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block title %}Manual{% endblock %}
+{% block content %}
+<h2>Manual</h2>
+<p class="stat-sub" style="margin: -4px 0 16px; font-size: 13px;">
+  Linked bank accounts update on their own. Use this for cash, or anything the bank sync can't see.
+  {% set _pending_count = pending_import_count() %}
+  {% if _pending_count > 0 %}
+  <a href="/import/review">{{ _pending_count }} pasted transaction{{ "s" if _pending_count != 1 }} waiting for review &rarr;</a>
+  {% endif %}
+</p>
+
+<input type="radio" name="manual_tab" id="man_add" class="toggle-input" {{ "checked" if tab != "paste" }}>
+<input type="radio" name="manual_tab" id="man_paste" class="toggle-input" {{ "checked" if tab == "paste" }}>
+<div class="segmented">
+  <label for="man_add">Add a transaction</label>
+  <label for="man_paste">Paste a statement</label>
+</div>
+
+<div class="toggle-panel" data-for="man_add">
+  {% include "_transaction_form.html" %}
+</div>
+<div class="toggle-panel" data-for="man_paste">
+  <p class="stat-sub" style="margin: 0 0 12px; font-size: 13px;">
+    Paste the transaction list from a bank or card website. Nothing is saved
+    straight away -- each one goes to a review list for you to confirm or discard.
+  </p>
+  {% include "_import_form.html" %}
+</div>
+{% endblock %}

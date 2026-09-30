@@ -10,11 +10,11 @@
   <header class="topbar">
     <a class="brand" href="/">Expense Tracker</a>
     <nav>
-      <a href="/">Dashboard</a>
-      <a href="/transactions/new">Add</a>
-      <a href="/accounts">Accounts</a>
-      <a href="/trends">Trends</a>
-      <a href="/import">Import</a>
+      {% set _path = request.url.path %}
+      <a href="/" {{ 'class=active' if _path == '/' }}>Dashboard</a>
+      <a href="/trends" {{ 'class=active' if _path.startswith('/trends') }}>Trends</a>
+      <a href="/accounts" {{ 'class=active' if _path.startswith('/accounts') }}>Accounts</a>
+      <a href="/manual" {{ 'class=active' if _path.startswith('/manual') or _path.startswith('/transactions') or _path.startswith('/import') }}>Manual</a>
       {% set _pending_count = pending_import_count() %}
       {# Bank transactions post automatically; this queue only holds
          manual statement pastes, so the link only shows when needed. #}

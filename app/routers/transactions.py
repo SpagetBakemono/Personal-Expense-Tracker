@@ -19,10 +19,40 @@ from app.templating import templates
 router = APIRouter()
 
 
+def manual_page(request: Request, db: Session, tab: str = "add", error: str | None = None):
+    """The Manual page: add a transaction by hand, or paste a statement --
+    the two things you do yourself, as opposed to the automatic bank sync.
+    Also rendered by POST /import when a paste fails, so the error shows
+    on the paste tab."""
+    return templates.TemplateResponse(
+        request,
+        "manual.html",
+        {
+            "accounts": db.scalars(select(Account).order_by(Account.name)).all(),
+            "categories": db.scalars(select(Category).order_by(Category.name)).all(),
+            "today": date.today().isoformat(),
+            "prefill": None,
+            "pending_import_id": None,
+            "tab": tab,
+            "error": error,
+        },
+    )
+
+
+@router.get("/manual")
+def manual(request: Request, tab: str = "add", db: Session = Depends(get_db)):
+    return manual_page(request, db, tab)
+
+
 @router.get("/transactions/new")
 def new_transaction_form(
     request: Request, pending_import_id: int | None = None, db: Session = Depends(get_db)
 ):
+    # Plain "add a transaction" lives on the Manual page now; this route
+    # stays for confirming a pasted-statement row from the review list.
+    if pending_import_id is None:
+        return RedirectResponse(url="/manual", status_code=303)
+
     accounts = db.scalars(select(Account).order_by(Account.name)).all()
     categories = db.scalars(select(Category).order_by(Category.name)).all()
 

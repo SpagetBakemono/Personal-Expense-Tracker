@@ -49,7 +49,8 @@ body {
   color: #b9c3cf;
   font-size: 14px;
 }
-.topbar nav a:hover { color: #ffffff; }
+.topbar nav a:hover, .topbar nav a.active { color: #ffffff; }
+.topbar nav a.active { font-weight: 600; }
 
 .container {
   max-width: 880px;
@@ -155,8 +156,9 @@ button {
 }
 button:hover { opacity: 0.9; }
 
-.row { display: flex; gap: 12px; }
-.row > * { flex: 1; }
+.row { display: flex; flex-wrap: wrap; gap: 12px; }
+/* Side by side when there's room, stacked on a phone. */
+.row > * { flex: 1 1 180px; }
 
 .empty { color: var(--muted); font-size: 14px; padding: 20px 0; }
 
@@ -230,6 +232,8 @@ button:hover { opacity: 0.9; }
 }
 .segmented label:hover { background: var(--bg); }
 
+#man_add:checked ~ .segmented label[for="man_add"],
+#man_paste:checked ~ .segmented label[for="man_paste"],
 #dash_living:checked ~ .segmented label[for="dash_living"],
 #dash_total:checked ~ .segmented label[for="dash_total"],
 #exp_living:checked ~ .segmented label[for="exp_living"],
@@ -240,6 +244,8 @@ button:hover { opacity: 0.9; }
 #bal_week:checked ~ .segmented label[for="bal_week"],
 #bal_month:checked ~ .segmented label[for="bal_month"] { background: var(--accent); color: #ffffff; }
 
+#man_add:checked ~ [data-for="man_paste"],
+#man_paste:checked ~ [data-for="man_add"],
 #dash_living:checked ~ [data-for="dash_total"],
 #dash_total:checked ~ [data-for="dash_living"],
 #exp_living:checked ~ [data-for="exp_total"],
@@ -298,3 +304,6 @@ button:hover { opacity: 0.9; }
 .chart-tip .tip-total { border-top: 1px solid var(--border); margin-top: 4px; padding-top: 4px; }
 
 .chart-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 6px; font-size: 12px; color: var(--muted); }
+
+/* Manual page: forms span the same width as the Add/Paste toggle above. */
+[data-for^="man_"] .form-card { max-width: none !important; }

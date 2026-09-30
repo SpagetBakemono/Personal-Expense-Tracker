@@ -28,7 +28,7 @@ seeds a starter set of categories automatically. From there:
 
 1. Go to **Accounts** and add your accounts (checking, cash, any credit
    cards) with their current balance as of today.
-2. Go to **Add** to log transactions. Pick "Transfer" for credit card
+2. Go to **Manual** to log transactions by hand. Pick "Transfer" for credit card
    payments (moving money from checking to pay down the card) -- don't log
    those as a second expense.
 
@@ -66,7 +66,8 @@ underlying script if setting that up again.
   `PLAID_SECRET_SANDBOX` / `PLAID_SECRET_PRODUCTION`, `PLAID_ENV` and
   `PLAID_TOKEN_KEY` in `.env` -- see `.env.example`. Access tokens are
   encrypted at rest.
-- **Statement paste** (`/import`): for anything Plaid can't reach -- paste
+- **Manual** (`/manual`): add a transaction by hand, or paste a statement
+  for anything Plaid can't reach -- paste
   raw statement text, parsed by Gemini (needs `GEMINI_API_KEY`).
 - **Review queue** (`/import/review`): pasted statement transactions wait
   here for Confirm/Discard before touching your real ledger. Likely

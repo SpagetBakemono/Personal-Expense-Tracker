@@ -16,7 +16,7 @@ fix it in the same change that makes it stale.
   answer-counting through `git add -p`) before trusting a split actually
   landed the right hunks in the right commit.
 - Smoke-test before every push: start the server, hit the main routes
-  (`/`, `/trends`, `/accounts`, `/transactions/new`), confirm 200s, check
+  (`/`, `/trends`, `/accounts`, `/manual`), confirm 200s, check
   actual rendered content where a change could plausibly break rendering.
   This has caught real bugs (a 422 on an empty query param, a template
   reading the wrong field) before they reached `main`.
@@ -75,6 +75,10 @@ fix it in the same change that makes it stale.
   tokens). The route passes plain data via a `|tojson` script blob.
   Every chart needs a real Y-axis; the balance chart starts at $0 and the
   mouse wheel zooms its floor.
+- Nav order is Dashboard > Trends > Accounts > Manual (user-specified).
+  "Manual" holds both hand-entry paths -- Add a transaction and Paste a
+  statement -- as tabs; `/transactions/new` (without a review-queue
+  prefill) and `GET /import` redirect there.
 - "Living" comes first (and is the default) wherever Living/Total toggles
   appear. Toggles are full-width `.segmented` rows (CSS radio + `~`, no
   JS; per-id rules in `style.css`).
