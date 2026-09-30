@@ -165,7 +165,7 @@
     {% for t in summary.transactions %}
     <tr>
       <td>{{ t.date.isoformat() }}</td>
-      <td><span class="badge">{{ t.type.value }}</span>{% if t.pending %} <span class="badge" style="color: var(--accent); border-color: var(--accent);">pending</span>{% endif %}</td>
+      <td><span class="badge">{{ "refund" if t.is_refund else t.type.value }}</span>{% if t.pending %} <span class="badge" style="color: var(--accent); border-color: var(--accent);">pending</span>{% endif %}</td>
       <td>{{ t.category.name if t.category else '—' }}</td>
       <td>{{ t.note or '' }}</td>
       <td class="amount {{ 'expense' if t.type.value == 'expense' else 'income' }}">${{ "%.2f"|format(t.amount) }}</td>

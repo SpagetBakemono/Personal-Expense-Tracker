@@ -137,6 +137,21 @@ def get_total_balance(balances: list[tuple[Account, Decimal]]) -> Decimal:
     return total
 
 
+def spend_amount(t: Transaction) -> Decimal:
+    """What t adds to spending: an expense counts in full, a refund or
+    payback subtracts, everything else is zero."""
+    if t.type == TransactionType.EXPENSE:
+        return t.amount
+    if t.type == TransactionType.INCOME and t.is_refund:
+        return -t.amount
+    return Decimal(0)
+
+
+def earned_amount(t: Transaction) -> Decimal:
+    """What t adds to income -- refunds and paybacks don't count."""
+    return t.amount if t.type == TransactionType.INCOME and not t.is_refund else Decimal(0)
+
+
 def get_month_summary(
     db: Session, year: int, month: int, account_id: int | None = None
 ) -> dict:
@@ -153,8 +168,8 @@ def get_month_summary(
         )
     txns = db.scalars(query).all()
 
-    income = sum((t.amount for t in txns if t.type == TransactionType.INCOME), Decimal(0))
-    expenses = sum((t.amount for t in txns if t.type == TransactionType.EXPENSE), Decimal(0))
+    income = sum((earned_amount(t) for t in txns), Decimal(0))
+    expenses = sum((spend_amount(t) for t in txns), Decimal(0))
     # Same as `expenses`/`income` but skips anything flagged
     # exclude_from_living (tuition, a security deposit refund, ...) --
     # shown alongside the real total, not instead of it, so a big one-off
@@ -162,29 +177,23 @@ def get_month_summary(
     # happened. Applies to income too -- a deposit refund inflates
     # "living net" the same way an unflagged tuition payment deflates it.
     living_expenses = sum(
-        (
-            t.amount
-            for t in txns
-            if t.type == TransactionType.EXPENSE and not t.exclude_from_living
-        ),
-        Decimal(0),
+        (spend_amount(t) for t in txns if not t.exclude_from_living), Decimal(0)
     )
     living_income = sum(
-        (
-            t.amount
-            for t in txns
-            if t.type == TransactionType.INCOME and not t.exclude_from_living
-        ),
-        Decimal(0),
+        (earned_amount(t) for t in txns if not t.exclude_from_living), Decimal(0)
     )
 
     by_category: dict[str, Decimal] = defaultdict(lambda: Decimal(0))
     by_category_living: dict[str, Decimal] = defaultdict(lambda: Decimal(0))
     for t in txns:
-        if t.type == TransactionType.EXPENSE and t.category:
-            by_category[t.category.name] += t.amount
+        spent = spend_amount(t)
+        if spent and t.category:
+            by_category[t.category.name] += spent
             if not t.exclude_from_living:
-                by_category_living[t.category.name] += t.amount
+                by_category_living[t.category.name] += spent
+    # A category a refund more than cancelled out this month isn't spending.
+    by_category = {k: v for k, v in by_category.items() if v > 0}
+    by_category_living = {k: v for k, v in by_category_living.items() if v > 0}
 
     return {
         "start": start,
@@ -244,13 +253,17 @@ def get_monthly_category_trend(
     filter). Uncategorized transactions count toward "Other" -- otherwise a
     month's bar would silently come up short of the Dashboard's total."""
     end = start + relativedelta(months=months)
-    txn_type = TransactionType.EXPENSE if kind == CategoryKind.EXPENSE else TransactionType.INCOME
+    spending = kind == CategoryKind.EXPENSE
     series = get_category_color_series(db, kind)
     index_by_category_id = {cid: idx for idx, s in enumerate(series) for cid in s["category_ids"]}
     other_idx = next((i for i, s in enumerate(series) if s["label"] in ("Other", "Other Income")), None)
 
+    # Spending = expenses minus refunds/paybacks (in their category);
+    # income = income that isn't a refund.
     query = select(Transaction).where(
-        Transaction.date >= start, Transaction.date < end, Transaction.type == txn_type
+        Transaction.date >= start,
+        Transaction.date < end,
+        Transaction.type.in_([TransactionType.EXPENSE, TransactionType.INCOME]),
     )
     if living_only:
         query = query.where(Transaction.exclude_from_living == False)  # noqa: E712
@@ -261,10 +274,16 @@ def get_monthly_category_trend(
     position = {(m.year, m.month): i for i, m in enumerate(month_starts)}
     values = [[Decimal(0)] * months for _ in series]
     for t in db.scalars(query):
+        amount = spend_amount(t) if spending else earned_amount(t)
+        if not amount:
+            continue
         idx = index_by_category_id.get(t.category_id, other_idx)
         col = position.get((t.date.year, t.date.month))
         if idx is not None and col is not None:
-            values[idx][col] += t.amount
+            values[idx][col] += amount
+    # A stacked bar can't show a category a refund more than cancelled
+    # out in some month; floor it at zero (rare, and tiny when it happens).
+    values = [[max(v, Decimal(0)) for v in row] for row in values]
 
     return {
         "months": [m.strftime("%b %Y") for m in month_starts],
@@ -401,22 +420,34 @@ def _trailing_average(
     # denominator (months_covered below) counting the same thing.
     window_start = as_of_month - relativedelta(months=months - 1)
 
+    # Spending averages net out refunds/paybacks; income averages skip them.
+    types = (
+        [TransactionType.EXPENSE, TransactionType.INCOME]
+        if txn_type == TransactionType.EXPENSE
+        else [TransactionType.INCOME]
+    )
+    amount_of = spend_amount if txn_type == TransactionType.EXPENSE else earned_amount
+
     def _scope(query):
-        query = query.where(Transaction.type == txn_type, Transaction.date < window_end)
+        query = query.where(Transaction.type.in_(types), Transaction.date < window_end)
         if account_id is not None:
             query = query.where(Transaction.account_id == account_id)
         if living_only:
             query = query.where(Transaction.exclude_from_living == False)  # noqa: E712
         return query
 
-    earliest = db.scalar(_scope(select(func.min(Transaction.date))))
+    # History starts at the first real expense (or income) -- a refund
+    # dated earlier shouldn't stretch the averaging window.
+    earliest = db.scalar(
+        _scope(select(func.min(Transaction.date))).where(Transaction.type == txn_type)
+    )
     if earliest is None:
         return Decimal(0), 0
 
     start = max(window_start, date(earliest.year, earliest.month, 1))
 
     txns = db.scalars(_scope(select(Transaction)).where(Transaction.date >= start)).all()
-    total = sum((t.amount for t in txns), Decimal(0))
+    total = sum((amount_of(t) for t in txns), Decimal(0))
 
     months_covered = (as_of_month.year - start.year) * 12 + (as_of_month.month - start.month) + 1
     months_covered = max(1, min(months, months_covered))

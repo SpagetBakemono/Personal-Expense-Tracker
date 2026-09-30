@@ -123,6 +123,14 @@ class Transaction(Base):
     # it, instead of one number that either hides or overstates it.
     exclude_from_living: Mapped[bool] = mapped_column(Boolean, default=False)
 
+    # Money coming *in* that isn't earnings: a friend paying you back for
+    # their share, a store refund, a card credit. Only meaningful on
+    # INCOME rows. Balances treat it exactly like income (the money did
+    # arrive), but summaries and trends subtract it from spending -- in
+    # its own (expense) category -- instead of counting it as income, so
+    # income means pay and spending means your actual share.
+    is_refund: Mapped[bool] = mapped_column(Boolean, default=False)
+
     # Set when this row came from (or was matched to) a Plaid transaction
     # -- unique, so a re-sync can never post the same bank transaction
     # twice. The pair id is the *other* side of a transfer between two

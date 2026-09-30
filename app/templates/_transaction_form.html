@@ -63,6 +63,10 @@
     <label><input type="checkbox" name="reimbursable" value="1" {{ "checked" if txn and txn.reimbursable else "" }} style="width:auto;display:inline-block;" /> Reimbursable (I'll get this money back)</label>
   </div>
 
+  <div id="refund_field">
+    <label><input type="checkbox" name="is_refund" value="1" {{ "checked" if txn and txn.is_refund else "" }} style="width:auto;display:inline-block;" /> Refund or payback (a friend paying you back, a store refund) -- takes it off spending in the category above instead of counting as income</label>
+  </div>
+
   <div id="exclude_from_living_field">
     {# Positive wording on purpose: "tick = counts as living". It used to
        be a "Not a living ..." box, and unticking it to mean "not living"
@@ -86,6 +90,7 @@ function toggleFields() {
   document.getElementById('to_account_field').style.display = (type === 'transfer') ? 'block' : 'none';
   document.getElementById('category_field').style.display = (type === 'transfer') ? 'none' : 'block';
   document.getElementById('reimbursable_field').style.display = (type === 'expense') ? 'block' : 'none';
+  document.getElementById('refund_field').style.display = (type === 'income') ? 'block' : 'none';
   document.getElementById('exclude_from_living_field').style.display = (type === 'transfer') ? 'none' : 'block';
   document.getElementById('exclude_from_living_label').textContent = (type === 'income')
     ? 'Counts as living income (untick for one-offs like a reimbursement or a deposit refund)'

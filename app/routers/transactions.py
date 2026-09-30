@@ -93,6 +93,7 @@ def create_transaction(
     reimbursable: str = Form(""),
     # Checkbox is "counts as living": present when ticked, absent when not.
     counts_as_living: str = Form(""),
+    is_refund: str = Form(""),
     pending_import_id: str = Form(""),
     db: Session = Depends(get_db),
 ):
@@ -107,6 +108,7 @@ def create_transaction(
         category_id=int(category_id) if category_id else None,
         note=note.strip() or None,
         reimbursable=bool(reimbursable) and txn_type == TransactionType.EXPENSE,
+        is_refund=bool(is_refund) and txn_type == TransactionType.INCOME,
         exclude_from_living=not counts_as_living
         and txn_type in (TransactionType.EXPENSE, TransactionType.INCOME),
     )
@@ -166,6 +168,7 @@ def update_transaction(
     reimbursable: str = Form(""),
     # Checkbox is "counts as living": present when ticked, absent when not.
     counts_as_living: str = Form(""),
+    is_refund: str = Form(""),
     db: Session = Depends(get_db),
 ):
     txn = db.get(Transaction, transaction_id)
@@ -185,6 +188,7 @@ def update_transaction(
     txn.category_id = int(category_id) if category_id else None
     txn.note = note.strip() or None
     txn.reimbursable = bool(reimbursable) and txn_type == TransactionType.EXPENSE
+    txn.is_refund = bool(is_refund) and txn_type == TransactionType.INCOME
     txn.exclude_from_living = not counts_as_living and txn_type in (
         TransactionType.EXPENSE,
         TransactionType.INCOME,

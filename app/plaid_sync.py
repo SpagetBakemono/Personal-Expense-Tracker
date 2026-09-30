@@ -29,6 +29,7 @@ from app.models import (
     Account,
     AccountType,
     Category,
+    CategoryKind,
     ImportCapture,
     Transaction,
     TransactionType,
@@ -130,6 +131,46 @@ def _pick_category(db: Session, t: dict, txn_type: TransactionType) -> int | Non
     elif txn_type == TransactionType.EXPENSE and name is None:
         name = "Other"
     return db.scalar(select(Category.id).where(Category.name == name)) if name else None
+
+
+# Accounts that only ever move money between people -- anything arriving
+# there is someone paying you back, not pay.
+P2P_WALLET_NAMES = ("venmo", "cash app", "paypal")
+
+
+def _is_refund(account: Account, t: dict) -> bool:
+    """Incoming money that should reduce spending rather than count as
+    income: a card credit (store refund, statement credit, offer), or a
+    person paying you back over Zelle/Venmo. Pay and interest never are."""
+    if t["outflow"] or t["category_primary"] == "INCOME":
+        return False
+    if account.type == AccountType.CREDIT_CARD:
+        return True
+    if any(w in account.name.lower() for w in P2P_WALLET_NAMES):
+        return True
+    return t["merchant"].lower().startswith("zelle") or t["category_primary"] == "TRANSFER_IN"
+
+
+def _refund_category(db: Session, t: dict) -> int | None:
+    """The expense category a refund comes off: whatever you last filed
+    this merchant's spending under (an Uber refund -> Transport), else
+    Plaid's guess. A payback from a friend has neither, so it stays
+    uncategorized (it still comes off total spending)."""
+    learned = db.scalar(
+        select(Transaction.category_id)
+        .where(Transaction.note == t["merchant"], Transaction.category_id.isnot(None),
+               Transaction.type == TransactionType.EXPENSE)
+        .order_by(Transaction.date.desc())
+        .limit(1)
+    )
+    if learned:
+        return learned
+    name = PLAID_CATEGORY_MAP.get(t["category_detailed"]) or PLAID_CATEGORY_MAP.get(
+        t["category_primary"]
+    )
+    if name is None or name in ("Salary", "Interest"):
+        return None
+    return db.scalar(select(Category.id).where(Category.name == name, Category.kind == CategoryKind.EXPENSE))
 
 
 def _find_by_plaid_id(db: Session, plaid_id: str) -> Transaction | None:
@@ -290,6 +331,14 @@ def _apply_added(db: Session, account: Account, t: dict, adopt_only: bool) -> bo
     else:
         txn_type = TransactionType.EXPENSE
 
+    is_refund = txn_type == TransactionType.INCOME and _is_refund(account, t)
+    if txn_type == TransactionType.TRANSFER:
+        category_id = None
+    elif is_refund:
+        category_id = _refund_category(db, t)
+    else:
+        category_id = _pick_category(db, t, txn_type)
+
     db.add(
         Transaction(
             date=t["date"],
@@ -297,8 +346,9 @@ def _apply_added(db: Session, account: Account, t: dict, adopt_only: bool) -> bo
             type=txn_type,
             account_id=account.id,
             to_account_id=to_account_id,
-            category_id=None if txn_type == TransactionType.TRANSFER else _pick_category(db, t, txn_type),
+            category_id=category_id,
             note=t["merchant"],
+            is_refund=is_refund,
             plaid_transaction_id=t["plaid_id"],
             pending=t["pending"],
         )

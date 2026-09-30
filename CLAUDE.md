@@ -53,6 +53,16 @@ fix it in the same change that makes it stale.
 - Credit card balances represent what you *owe* -- a liability, not an
   asset. Income/credits applied directly to a card reduce what's owed
   (subtract), not add to it; this was a real bug once (see git log).
+- Refunds and paybacks (`Transaction.is_refund`, INCOME rows only): a
+  friend paying you back, a store refund, a card credit. Balances count
+  them like income (the money arrived), but every summary/trend goes
+  through `spend_amount()` / `earned_amount()` in `services.py`, which
+  subtract them from spending in their (expense) category instead of
+  counting them as income -- use those helpers, not raw type checks, in
+  any new total. The sync flags card credits and Zelle/Venmo/P2P-wallet
+  inflows automatically (`_is_refund` in `plaid_sync.py`); pay and
+  interest never. Employer reimbursements (BCG) are deliberately *not*
+  refunds -- the user treats them as non-living income.
 - Categories are a fixed, seeded list (`DEFAULT_EXPENSE_CATEGORIES` /
   `DEFAULT_INCOME_CATEGORIES` in `services.py`) -- no add-category UI yet.
   `seed_default_categories()` only inserts names that don't already exist,
