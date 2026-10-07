@@ -3,10 +3,11 @@ from decimal import Decimal, InvalidOperation
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import RedirectResponse
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
-from app.models import Account, AccountType
+from app.models import Account, AccountType, ImportCapture
 from app.plaid_sync import get_balance_drift, get_last_synced, get_sync_alerts
 from app.services import get_all_balances, relative_time
 from app.templating import templates
@@ -18,11 +19,20 @@ router = APIRouter()
 def list_accounts(request: Request, db: Session = Depends(get_db)):
     balances = get_all_balances(db)
     last_synced = get_last_synced(db)
+    # Each linked account's own last sync, in words ("2 hours ago").
+    last_sync_by_account = {
+        account_id: relative_time(when)
+        for account_id, when in db.execute(
+            select(ImportCapture.account_id, func.max(ImportCapture.created_at))
+            .group_by(ImportCapture.account_id)
+        ).all()
+    }
     return templates.TemplateResponse(
         request,
         "accounts.html",
         {
             "balances": balances,
+            "last_sync_by_account": last_sync_by_account,
             "sync_alerts": get_sync_alerts(db),
             "balance_drift": get_balance_drift(db),
             "last_synced": relative_time(last_synced) if last_synced else None,

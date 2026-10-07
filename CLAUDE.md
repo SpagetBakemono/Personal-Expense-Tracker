@@ -77,6 +77,15 @@ fix it in the same change that makes it stale.
 
 ## UI / charts
 
+- UI is shared with the Clearbook capstone (../Expense-Tracker-Capstone) and
+  was ported from it: light/dark theme tokens in `style.css` (never
+  hard-code a color; `theme.js` + `_theme_toggle.html`), the `money` Jinja
+  filter, the Dashboard period bar + Living/Total sections, one-line
+  Accounts rows (Disconnect lives on the account's Edit page), 44px flat
+  form controls, friendly 404/500 pages (`error.html`), chart category
+  colors as `var(--cat-N)`. Keep the two in step when changing UI.
+- The user prefers few words in the UI; don't add explanatory copy.
+
 - Palette: "Dark Green Tropical" -- navy `#13243B`, dark green `#153D35`,
   green `#1D8B65`, teal `#2C9D90`, off-white `#F3F3F1` (tokens at the top
   of `style.css`). User-chosen; don't swap it out.

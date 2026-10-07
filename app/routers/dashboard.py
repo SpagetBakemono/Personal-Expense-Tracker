@@ -2,9 +2,11 @@ from datetime import date
 
 from dateutil.relativedelta import relativedelta
 from fastapi import APIRouter, Depends, Request
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
+from app.models import Transaction
 from app.services import (
     get_all_balances,
     get_month_summary,
@@ -55,6 +57,16 @@ def dashboard(
     # An account_id that doesn't match any real account (stale link, typo'd
     # URL) falls back to unfiltered rather than silently showing nothing.
     effective_account_id = selected_account.id if selected_account else None
+
+    # Months to offer in the picker: from the first transaction to now,
+    # newest first, labeled in words ("October 2026", not "2026-10").
+    first_txn = db.scalar(select(func.min(Transaction.date)))
+    first_month = date(first_txn.year, first_txn.month, 1) if first_txn else this_month
+    month_options = []
+    m = this_month
+    while m >= min(first_month, selected_month):
+        month_options.append({"value": m.strftime("%Y-%m"), "label": m.strftime("%B %Y")})
+        m -= relativedelta(months=1)
 
     summary = get_month_summary(
         db, selected_month.year, selected_month.month, effective_account_id
@@ -112,5 +124,7 @@ def dashboard(
             "next_month_value": next_month.strftime("%Y-%m"),
             "current_month_value": this_month.strftime("%Y-%m"),
             "is_current_month": selected_month == this_month,
+            "month_options": month_options,
+            "has_prev_month": selected_month > first_month,
         },
     )
