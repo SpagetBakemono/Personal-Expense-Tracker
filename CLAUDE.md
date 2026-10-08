@@ -132,7 +132,10 @@ flowed). What keeps that safe:
   flagged -- the bank's balance often counts a charge as posted before
   Plaid's feed stops calling it pending, and a later sync resolves it.
 - Card payments seen from both checking and the card merge into one
-  TRANSFER.
+  TRANSFER -- in either order, and even when the bank labels the checking
+  side oddly (BofA calls its own card payment "LOAN_PAYMENTS_OTHER_PAYMENT",
+  so it first lands as an expense; the card's payment credit then converts
+  it). A card payment credit is never treated as a refund.
 
 Anything before an account's `opening_balance_date` is ignored. Two
 earlier import paths were removed once every bank account was on Plaid:

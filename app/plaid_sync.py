@@ -144,6 +144,9 @@ def _is_refund(account: Account, t: dict) -> bool:
     person paying you back over Zelle/Venmo. Pay and interest never are."""
     if t["outflow"] or t["category_primary"] == "INCOME":
         return False
+    # A card payment arriving on the card is a transfer, never a refund.
+    if t["category_detailed"] == CARD_PAYMENT or t["category_primary"] == "LOAN_PAYMENTS":
+        return False
     if account.type == AccountType.CREDIT_CARD:
         return True
     if any(w in account.name.lower() for w in P2P_WALLET_NAMES):
@@ -251,7 +254,7 @@ def _pair_transfer(db: Session, account: Account, t: dict) -> bool:
         row.plaid_pair_transaction_id = row.plaid_transaction_id
         row.plaid_transaction_id = t["plaid_id"]
         row.to_account_id, row.account_id = row.account_id, account.id
-        row.type, row.category_id = TransactionType.TRANSFER, None
+        row.type, row.category_id, row.is_refund = TransactionType.TRANSFER, None, False
         return True
     # This is the receiving side; the paying side is a transfer still
     # waiting for its destination.
@@ -265,6 +268,25 @@ def _pair_transfer(db: Session, account: Account, t: dict) -> bool:
             _within(PAIR_WINDOW_DAYS, t["date"]),
         )
     )
+    if row is None and account.type == AccountType.CREDIT_CARD:
+        # The paying side was labeled differently by the bank (BofA calls
+        # its own card payment a "loan payment, other"), so it was posted
+        # as an expense. A same-amount debit from your checking a few days
+        # around a card-payment credit is that same payment.
+        row = db.scalar(
+            select(Transaction).join(Account, Transaction.account_id == Account.id).where(
+                Account.type != AccountType.CREDIT_CARD,
+                Transaction.account_id != account.id,
+                Transaction.type == TransactionType.EXPENSE,
+                Transaction.plaid_transaction_id.isnot(None),
+                Transaction.plaid_pair_transaction_id.is_(None),
+                Transaction.amount == t["amount"],
+                _within(PAIR_WINDOW_DAYS, t["date"]),
+            )
+        )
+        if row is not None:
+            row.type, row.category_id = TransactionType.TRANSFER, None
+            row.exclude_from_living, row.reimbursable = False, False
     if row is None:
         return False
     row.to_account_id = account.id
