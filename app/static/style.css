@@ -23,6 +23,7 @@
   --danger: #c93b3b;
   --expense: #b42f2f;        /* 6.2:1 on white */
   --income: #17795a;         /* 5.4:1 on white */
+  --transfer: #8a5d00;       /* amber; 5.8:1 on white, 5.2:1 on the page */
   --hover: rgba(19, 36, 59, 0.06);
   --banner-bg: #e6f2ee;
   --banner-border: #cfe5dc;
@@ -63,6 +64,7 @@
   --danger: #f28b8b;
   --expense: #f28b8b;        /* 6.8:1 on --surface */
   --income: #5fd0a3;         /* 8.4:1 on --surface */
+  --transfer: #e8b84a;       /* amber; 8.7:1 on --surface */
   --hover: rgba(255, 255, 255, 0.06);
   --banner-bg: #123129;
   --banner-border: #1d4a3d;
@@ -93,6 +95,7 @@
     --danger: #f28b8b;
     --expense: #f28b8b;        /* 6.8:1 on --surface */
     --income: #5fd0a3;         /* 8.4:1 on --surface */
+  --transfer: #e8b84a;       /* amber; 8.7:1 on --surface */
     --hover: rgba(255, 255, 255, 0.06);
     --banner-bg: #123129;
     --banner-border: #1d4a3d;
@@ -661,3 +664,8 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .link-button { background: none; border: none; padding: 0; width: auto; color: var(--link); font: inherit; font-weight: 600; text-decoration: underline; cursor: pointer; }
 .link-button:hover { opacity: 1; text-decoration-thickness: 2px; }
 .link-button:focus-visible { outline: 3px solid var(--chart-line); outline-offset: 2px; border-radius: 3px; }
+
+/* Transfers (money moving between your own accounts) read amber: neither
+   spending (red) nor income (green). */
+.amount.transfer { color: var(--transfer); }
+.badge.badge-transfer { color: var(--transfer); border-color: var(--transfer); }
