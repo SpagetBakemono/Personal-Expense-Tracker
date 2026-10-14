@@ -85,6 +85,9 @@ fix it in the same change that makes it stale.
   form controls, friendly 404/500 pages (`error.html`), chart category
   colors as `var(--cat-N)`. Keep the two in step when changing UI.
 - The user prefers few words in the UI; don't add explanatory copy.
+- An eye toggle hides the total balance (Dashboard) and the balance chart
+  (Trends): `data-hide-balance` on `<html>`, set from localStorage by
+  `theme.js` before paint, CSS does the hiding.
 
 - Palette: "Dark Green Tropical" -- navy `#13243B`, dark green `#153D35`,
   green `#1D8B65`, teal `#2C9D90`, off-white `#F3F3F1` (tokens at the top

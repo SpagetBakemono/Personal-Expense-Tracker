@@ -56,7 +56,11 @@
 <div class="toggle-panel" data-for="inc_living">{{ bar_chart("income_living", "No living income in this range.") }}</div>
 <div class="toggle-panel" data-for="inc_total">{{ bar_chart("income_total", "No income in this range.") }}</div>
 
-<h2>Balance over time</h2>
+<div class="balance-section-head">
+  <h2>Balance over time</h2>
+  {% include "_balance_toggle.html" %}
+</div>
+<div class="balance-section">
 <input type="radio" name="bal_gran" id="bal_day" class="toggle-input">
 <input type="radio" name="bal_gran" id="bal_week" class="toggle-input" checked>
 <input type="radio" name="bal_gran" id="bal_month" class="toggle-input">
@@ -80,6 +84,7 @@
   </div>
 </div>
 {% endfor %}
+</div>
 
 {# |tojson escapes <, > and & -- safe inside a script element. #}
 <script type="application/json" id="chart-data">{{ charts|tojson }}</script>

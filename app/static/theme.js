@@ -9,6 +9,7 @@
   try {
     var saved = localStorage.getItem("clearbook-theme");
     if (saved === "light" || saved === "dark") root.setAttribute("data-theme", saved);
+    if (localStorage.getItem("clearbook-hide-balance") === "1") root.setAttribute("data-hide-balance", "");
   } catch (e) { /* storage unavailable: follow the system */ }
 
   function current() {
@@ -16,6 +17,17 @@
     if (set) return set;
     return window.matchMedia("(prefers-color-scheme: dark)").matches ? "dark" : "light";
   }
+
+  // Hide total balance (Dashboard) and the balance chart (Trends).
+  document.addEventListener("click", function (ev) {
+    var btn = ev.target.closest && ev.target.closest("[data-balance-toggle]");
+    if (!btn) return;
+    var hide = !root.hasAttribute("data-hide-balance");
+    if (hide) root.setAttribute("data-hide-balance", "");
+    else root.removeAttribute("data-hide-balance");
+    try { localStorage.setItem("clearbook-hide-balance", hide ? "1" : "0"); } catch (e) { /* not saved */ }
+    window.dispatchEvent(new Event("resize"));  // a revealed chart draws itself
+  });
 
   document.addEventListener("click", function (ev) {
     var btn = ev.target.closest && ev.target.closest("[data-theme-toggle]");

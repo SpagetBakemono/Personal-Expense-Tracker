@@ -565,6 +565,18 @@ button:hover { opacity: 0.9; }
 .balance-hero { margin-bottom: 20px; }
 .balance-hero .stat-label { min-height: 0; }
 .balance-hero-value { font-size: 34px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
+.balance-hero-head, .balance-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.balance-section-head { margin: 28px 0 12px; }
+.balance-section-head h2 { margin: 0; }
+.balance-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; }
+.balance-toggle:hover { color: var(--text); border-color: var(--muted); }
+.balance-toggle:focus-visible { outline: 3px solid var(--chart-line); outline-offset: 2px; }
+.balance-toggle svg { width: 16px; height: 16px; }
+.balance-toggle .icon-eye-off, .balance-mask { display: none; }
+:root[data-hide-balance] .balance-toggle .icon-eye { display: none; }
+:root[data-hide-balance] .balance-toggle .icon-eye-off { display: block; }
+:root[data-hide-balance] .balance-amount, :root[data-hide-balance] .balance-section { display: none; }
+:root[data-hide-balance] .balance-mask { display: inline; color: var(--muted); }
 
 /* Month + account in one fixed row: [<] [month] [>] [account]. Grid
    columns, so nothing resizes when the month or arrow state changes. */

@@ -12,8 +12,11 @@
 
 {% set _account_qs = "&account_id=" + selected_account_id|string if selected_account_id else "" %}
 <div class="card balance-hero">
-  <p class="stat-label">Total balance{{ " · " + selected_account.name if selected_account else "" }}</p>
-  <p class="stat-value balance-hero-value {{ 'positive' if total_balance >= 0 else 'negative' }}">{{ total_balance|money }}</p>
+  <div class="balance-hero-head">
+    <p class="stat-label">Total balance{{ " · " + selected_account.name if selected_account else "" }}</p>
+    {% include "_balance_toggle.html" %}
+  </div>
+  <p class="stat-value balance-hero-value {{ 'positive' if total_balance >= 0 else 'negative' }}"><span class="balance-amount">{{ total_balance|money }}</span><span class="balance-mask" aria-label="Hidden">$ ••••••</span></p>
 </div>
 
 {# Period bar: which month, which account -- one aligned row. #}
