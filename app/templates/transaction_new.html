@@ -1,6 +1,8 @@
 {% extends "base.html" %}
 {% block title %}{{ "Edit transaction" if txn else "Add transaction" }}{% endblock %}
 {% block content %}
+<div class="txn-page">
 <h2>{{ "Edit transaction" if txn else "Add transaction" }}</h2>
 {% include "_transaction_form.html" %}
+</div>
 {% endblock %}

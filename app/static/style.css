@@ -712,3 +712,5 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .form-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
 .btn-danger-outline { background: transparent; color: var(--danger); border: 1px solid var(--error-border); }
 .btn-danger-outline:hover { background: var(--error-bg); opacity: 1; }
+/* Edit transaction: the card (and its heading) centered on the page. */
+.txn-page { max-width: 480px; margin: 0 auto; }
