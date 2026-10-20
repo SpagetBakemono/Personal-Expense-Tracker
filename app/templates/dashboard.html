@@ -173,23 +173,37 @@
 </table>
 {% endif %}
 
-<h2>Transactions ({{ summary.transactions|length }})</h2>
+{% set _txns = summary.transactions if show_all_transactions else summary.transactions[:recent_limit] %}
+<div class="section-head" id="transactions">
+  <h2>Transactions</h2>
+  {% if summary.transactions|length > recent_limit %}
+  {% if show_all_transactions %}
+  <a class="section-link" href="/?month={{ month_value }}{{ _account_qs }}#transactions">Show less</a>
+  {% else %}
+  <a class="section-link" href="/?month={{ month_value }}{{ _account_qs }}&all=1#transactions">View all ({{ summary.transactions|length }})</a>
+  {% endif %}
+  {% endif %}
+</div>
 {% if summary.transactions %}
-<table>
-  <thead><tr><th>Date</th><th>Type</th><th>Category</th><th>Note</th><th>Amount</th><th class="actions-col"></th></tr></thead>
-  <tbody>
-    {% for t in summary.transactions %}
-    <tr>
-      <td>{{ t.date.isoformat() }}</td>
-      <td><span class="badge {{ 'badge-transfer' if t.type.value == 'transfer' }}">{{ "refund" if t.is_refund else t.type.value }}</span>{% if t.pending %} <span class="badge" style="color: var(--accent); border-color: var(--accent);">pending</span>{% endif %}</td>
-      <td>{{ t.category.name if t.category else '—' }}</td>
-      <td>{{ t.note or '' }}</td>
-      <td class="amount {{ t.type.value }}">{{ t.amount|money }}</td>
-      <td class="actions-col"><a href="/transactions/{{ t.id }}/edit" class="btn-sm btn-sm-outline">Edit</a></td>
-    </tr>
-    {% endfor %}
-  </tbody>
-</table>
+<div class="txn-list">
+  {% for t in _txns %}
+  <a class="txn-card" href="/transactions/{{ t.id }}/edit">
+    <div class="txn-main">
+      <p class="txn-title">{{ t.note or (t.category.name if t.category else t.type.value|capitalize) }}</p>
+      <p class="txn-sub">
+        {% if t.type.value == 'transfer' %}{{ t.account.name }} &rarr; {{ t.to_account.name if t.to_account else '—' }}{% else %}{{ t.account.name }}{% if t.category and t.note %} · {{ t.category.name }}{% endif %}{% endif %}
+        {% if t.is_refund %}<span class="badge">refund</span>{% endif %}
+        {% if t.pending %}<span class="badge badge-pending">pending</span>{% endif %}
+        {% if t.exclude_from_living %}<span class="badge">one-off</span>{% endif %}
+      </p>
+    </div>
+    <div class="txn-side">
+      <p class="amount {{ t.type.value }}">{{ t.amount|money }}</p>
+      <p class="txn-sub">{{ t.date.strftime("%a, %d %b %Y") }}</p>
+    </div>
+  </a>
+  {% endfor %}
+</div>
 {% else %}
 <p class="empty">No transactions yet this month{{ " for " + selected_account.name if selected_account else "" }}.</p>
 {% endif %}

@@ -714,3 +714,20 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
 .btn-danger-outline:hover { background: var(--error-bg); opacity: 1; }
 /* Edit transaction: the card (and its heading) centered on the page. */
 .txn-page { max-width: 480px; margin: 0 auto; }
+
+/* Dashboard transactions as cards: what/where on the left, amount/date on
+   the right; the whole card opens the edit page. */
+.section-link { font-size: 14px; color: var(--muted); text-decoration: none; }
+.section-link:hover { color: var(--text); }
+.txn-list { display: flex; flex-direction: column; gap: 10px; }
+.txn-card { display: flex; align-items: center; justify-content: space-between; gap: 16px; padding: 14px 18px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); color: var(--text); text-decoration: none; }
+.txn-card:hover { border-color: var(--muted); }
+.txn-card:focus-visible { outline: 3px solid var(--chart-line); outline-offset: 2px; }
+.txn-card p { margin: 0; }
+.txn-main { min-width: 0; display: flex; flex-direction: column; gap: 4px; }
+.txn-title { font-size: 15px; font-weight: 500; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.txn-sub { font-size: 12px; color: var(--muted); display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+.txn-side { flex: none; display: flex; flex-direction: column; align-items: flex-end; gap: 4px; }
+.txn-side .amount { font-size: 16px; font-weight: 500; font-variant-numeric: tabular-nums; }
+.badge.badge-pending { color: var(--accent); border-color: var(--accent); }
+#transactions { scroll-margin-top: 80px; }

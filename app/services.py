@@ -166,7 +166,7 @@ def get_month_summary(
         "living_net": living_income - living_expenses,
         "by_category": dict(sorted(by_category.items(), key=lambda kv: -kv[1])),
         "by_category_living": dict(sorted(by_category_living.items(), key=lambda kv: -kv[1])),
-        "transactions": sorted(txns, key=lambda t: t.date, reverse=True),
+        "transactions": sorted(txns, key=lambda t: (t.date, t.id), reverse=True),
     }
 
 

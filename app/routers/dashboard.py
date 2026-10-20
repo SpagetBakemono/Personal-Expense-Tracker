@@ -37,6 +37,7 @@ def dashboard(
     request: Request,
     account_id: str | None = None,
     month: str | None = None,
+    all: str | None = None,
     db: Session = Depends(get_db),
 ):
     today = date.today()
@@ -126,5 +127,8 @@ def dashboard(
             "is_current_month": selected_month == this_month,
             "month_options": month_options,
             "has_prev_month": selected_month > first_month,
+            # Transactions list: the 10 most recent, or every one (?all=1).
+            "show_all_transactions": bool(all),
+            "recent_limit": 10,
         },
     )
