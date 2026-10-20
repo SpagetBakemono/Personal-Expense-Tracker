@@ -18,8 +18,8 @@
 {% macro category_picker(kind) %}
 {% set pickable, shown_ids = category_choices[kind] %}
 <details class="cat-picker">
-  <summary class="btn-sm btn-sm-outline">Categories <span class="cat-picker-count">{{ shown_ids|length }}/{{ max_chart_categories }}</span></summary>
-  <form class="cat-picker-menu" method="post" action="/trends/categories" data-max="{{ max_chart_categories }}">
+  <summary class="btn-sm btn-sm-outline">Categories <span class="cat-picker-count">{{ shown_ids|length }}/{{ pickable|length }}</span></summary>
+  <form class="cat-picker-menu" method="post" action="/trends/categories">
     <input type="hidden" name="kind" value="{{ kind }}">
     <input type="hidden" name="category_id" value="{{ selected_category_id or '' }}">
     <input type="hidden" name="start" value="{{ start_value }}">

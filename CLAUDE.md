@@ -67,15 +67,17 @@ fix it in the same change that makes it stale.
   `DEFAULT_INCOME_CATEGORIES` in `services.py`) -- no add-category UI yet.
   `seed_default_categories()` only inserts names that don't already exist,
   so adding to the list is safe to apply to an existing database.
-- Up to 7 categories of each kind get a dedicated color in the Trends
-  stacked charts; the rest fold into a shared "Other" bucket (see
-  `get_category_color_series` in `services.py`). Which 7 is the user's
-  pick from the "Categories" dropdown on Trends, saved in the `settings`
-  table (key/value, JSON); default is the first 7 by id. "Other" /
-  "Other Income" are never offered -- they always fold. The colors (`CATEGORY_COLOR_SLOTS`) come from the app's
-  palette family and passed the dataviz validator only for *adjacent*
-  slots -- so charts stack series in that fixed order, never sorted by
-  amount.
+- Each category the user checks in the Trends "Categories" dropdown gets
+  a dedicated color in the stacked charts; unchecked ones fold into a
+  shared "Other" bucket (see `get_category_color_series` in
+  `services.py`). The pick is saved in the `settings` table (key/value,
+  JSON); default is all. No limit on how many (user's call) -- there are
+  10 dedicated `--cat-N` slots plus Other, enough for every seeded
+  category; adding categories past that needs more validated slots.
+  "Other" / "Other Income" are never offered -- they always fold.
+- The colors (`CATEGORY_COLOR_SLOTS`) come from the app's palette family
+  and passed the dataviz validator only for *adjacent* slots -- so charts
+  stack series in that fixed order, never sorted by amount.
 
 ## UI / charts
 

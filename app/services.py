@@ -35,7 +35,7 @@ from app.models import (
 # #FFFFFF) and a dark set (validated on #172231) -- see --cat-N in
 # style.css. All checks pass for *adjacent* slots, which is why the charts
 # stack series in this fixed order.
-CATEGORY_COLOR_SLOTS = [f"var(--cat-{i})" for i in range(1, 9)]  # values in style.css, per theme
+CATEGORY_COLOR_SLOTS = [f"var(--cat-{i})" for i in range(1, 12)]  # values in style.css, per theme
 
 
 def get_account_balance(db: Session, account: Account) -> Decimal:
@@ -170,8 +170,9 @@ def get_month_summary(
     }
 
 
-# The palette has 7 dedicated hues; an 8th slot is the shared "Other".
-MAX_CHART_CATEGORIES = 7
+# Every slot but the last is a dedicated hue; the last is the shared
+# "Other". 10 dedicated covers every seeded non-catch-all category.
+MAX_CHART_CATEGORIES = len(CATEGORY_COLOR_SLOTS) - 1
 # Categories that *are* the catch-all -- always folded into "Other",
 # never offered as their own series.
 CATCH_ALL_CATEGORY_NAMES = {"Other", "Other Income"}
@@ -184,7 +185,7 @@ def _chart_categories_key(kind: CategoryKind) -> str:
 def get_chart_category_choices(db: Session, kind: CategoryKind) -> tuple[list[Category], set[int]]:
     """The categories of `kind` that can get their own chart series (by
     id), and which of them are shown -- the user's saved pick from the
-    Trends "Categories" dropdown, or the first MAX_CHART_CATEGORIES."""
+    Trends "Categories" dropdown, or all of them."""
     pickable = [
         c for c in db.scalars(select(Category).where(Category.kind == kind).order_by(Category.id))
         if c.name not in CATCH_ALL_CATEGORY_NAMES
@@ -199,7 +200,8 @@ def get_chart_category_choices(db: Session, kind: CategoryKind) -> tuple[list[Ca
 def save_chart_categories(db: Session, kind: CategoryKind, category_ids: list[int]) -> None:
     pickable, _ = get_chart_category_choices(db, kind)
     allowed = {c.id for c in pickable}
-    # Keep the first MAX_CHART_CATEGORIES valid ones, in id order.
+    # Only as many as there are colors (only matters if categories are
+    # ever added past MAX_CHART_CATEGORIES).
     chosen = sorted(i for i in set(category_ids) if i in allowed)[:MAX_CHART_CATEGORIES]
     key = _chart_categories_key(kind)
     row = db.get(Setting, key)
@@ -212,10 +214,10 @@ def save_chart_categories(db: Session, kind: CategoryKind, category_ids: list[in
 
 def get_category_color_series(db: Session, kind: CategoryKind = CategoryKind.EXPENSE) -> list[dict]:
     """{label, color, category_ids} assignment for the stacked trend
-    charts: each shown category (see get_chart_category_choices, at most
-    7) gets a dedicated hue from CATEGORY_COLOR_SLOTS in id order; every
+    charts: each shown category (see get_chart_category_choices) gets a
+    dedicated hue from CATEGORY_COLOR_SLOTS in id order; every
     other category of that kind folds into a shared "Other" bucket on the
-    8th. Assigned by category id, never by how much each spent, so a
+    last slot. Assigned by category id, never by how much each spent, so a
     category's color doesn't change when the visible time range does."""
     all_ids = set(db.scalars(select(Category.id).where(Category.kind == kind)))
     pickable, shown_ids = get_chart_category_choices(db, kind)

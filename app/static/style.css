@@ -35,7 +35,8 @@
   /* Category colors for the stacked Trends charts (services.py emits
      var(--cat-N)); validated with the dataviz script on #ffffff. */
   --cat-1: #0d5c91; --cat-2: #2c9d90; --cat-3: #5c39b5; --cat-4: #77b30e;
-  --cat-5: #0e78e4; --cat-6: #1d8b65; --cat-7: #9e8bf7; --cat-8: #4a620b;
+  --cat-5: #0e78e4; --cat-6: #1d8b65; --cat-7: #9e8bf7; --cat-8: #b8327a;
+  --cat-9: #b5651d; --cat-10: #0891b2; --cat-11: #4a620b;
   --radius: 10px;
   /* Brand + headlines: the platform serif (New York on Apple devices,
      Georgia elsewhere) -- classy without downloading a web font. */
@@ -74,7 +75,8 @@
   --error-text: #f6b1b1;
   --shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
   --cat-1: #2777b3; --cat-2: #0fa99a; --cat-3: #8265e4; --cat-4: #6ea60b;
-  --cat-5: #0a72da; --cat-6: #1d966d; --cat-7: #9480eb; --cat-8: #5f7a1f;
+  --cat-5: #0a72da; --cat-6: #1d966d; --cat-7: #9480eb; --cat-8: #d0559a;
+  --cat-9: #c77a35; --cat-10: #1aa3c7; --cat-11: #5f7a1f;
 }
 @media (prefers-color-scheme: dark) {
   :root:not([data-theme="light"]) {
@@ -105,7 +107,8 @@
     --error-text: #f6b1b1;
     --shadow: 0 4px 16px rgba(0, 0, 0, 0.45);
     --cat-1: #2777b3; --cat-2: #0fa99a; --cat-3: #8265e4; --cat-4: #6ea60b;
-    --cat-5: #0a72da; --cat-6: #1d966d; --cat-7: #9480eb; --cat-8: #5f7a1f;
+    --cat-5: #0a72da; --cat-6: #1d966d; --cat-7: #9480eb; --cat-8: #d0559a;
+  --cat-9: #c77a35; --cat-10: #1aa3c7; --cat-11: #5f7a1f;
   }
 }
 
@@ -577,7 +580,6 @@ button:hover { opacity: 0.9; }
 .cat-picker-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 14px; color: var(--text); cursor: pointer; text-transform: none; letter-spacing: 0; margin: 0; }
 .cat-picker-option:hover { background: var(--hover); }
 .cat-picker-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
-.cat-picker-option:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
 .cat-picker-menu .btn-sm { margin-top: 6px; }
 .balance-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; }
 .balance-toggle:hover { color: var(--text); border-color: var(--muted); }
