@@ -7,6 +7,7 @@ stored as a running counter on Account. For a personal-scale dataset this
 is fast enough, and it avoids an entire class of bugs where a stored
 balance drifts out of sync after an edit or delete.
 """
+import json
 from collections import defaultdict
 from datetime import date, datetime, timedelta
 from decimal import Decimal
@@ -22,6 +23,7 @@ from app.models import (
     CategoryKind,
     ImportCapture,
     ReimbursementStatus,
+    Setting,
     Transaction,
     TransactionType,
 )
@@ -168,25 +170,68 @@ def get_month_summary(
     }
 
 
+# The palette has 7 dedicated hues; an 8th slot is the shared "Other".
+MAX_CHART_CATEGORIES = 7
+# Categories that *are* the catch-all -- always folded into "Other",
+# never offered as their own series.
+CATCH_ALL_CATEGORY_NAMES = {"Other", "Other Income"}
+
+
+def _chart_categories_key(kind: CategoryKind) -> str:
+    return f"chart_categories_{kind.value.lower()}"
+
+
+def get_chart_category_choices(db: Session, kind: CategoryKind) -> tuple[list[Category], set[int]]:
+    """The categories of `kind` that can get their own chart series (by
+    id), and which of them are shown -- the user's saved pick from the
+    Trends "Categories" dropdown, or the first MAX_CHART_CATEGORIES."""
+    pickable = [
+        c for c in db.scalars(select(Category).where(Category.kind == kind).order_by(Category.id))
+        if c.name not in CATCH_ALL_CATEGORY_NAMES
+    ]
+    saved = db.get(Setting, _chart_categories_key(kind))
+    if saved is None:
+        return pickable, {c.id for c in pickable[:MAX_CHART_CATEGORIES]}
+    wanted = set(json.loads(saved.value))
+    return pickable, {c.id for c in pickable if c.id in wanted}
+
+
+def save_chart_categories(db: Session, kind: CategoryKind, category_ids: list[int]) -> None:
+    pickable, _ = get_chart_category_choices(db, kind)
+    allowed = {c.id for c in pickable}
+    # Keep the first MAX_CHART_CATEGORIES valid ones, in id order.
+    chosen = sorted(i for i in set(category_ids) if i in allowed)[:MAX_CHART_CATEGORIES]
+    key = _chart_categories_key(kind)
+    row = db.get(Setting, key)
+    if row is None:
+        db.add(Setting(key=key, value=json.dumps(chosen)))
+    else:
+        row.value = json.dumps(chosen)
+    db.commit()
+
+
 def get_category_color_series(db: Session, kind: CategoryKind = CategoryKind.EXPENSE) -> list[dict]:
-    """Fixed {label, color, category_ids} assignment for the stacked trend
-    charts: the first 7 categories of `kind` (by id, i.e. creation order)
-    get a dedicated hue from CATEGORY_COLOR_SLOTS; every other category of
-    that kind folds into a shared "Other" bucket on the 8th. Fixed by
-    category id, never by how much each spent, so a category's color never
-    changes when the visible time range does."""
-    categories = db.scalars(select(Category).where(Category.kind == kind).order_by(Category.id)).all()
+    """{label, color, category_ids} assignment for the stacked trend
+    charts: each shown category (see get_chart_category_choices, at most
+    7) gets a dedicated hue from CATEGORY_COLOR_SLOTS in id order; every
+    other category of that kind folds into a shared "Other" bucket on the
+    8th. Assigned by category id, never by how much each spent, so a
+    category's color doesn't change when the visible time range does."""
+    all_ids = set(db.scalars(select(Category.id).where(Category.kind == kind)))
+    pickable, shown_ids = get_chart_category_choices(db, kind)
+    shown = [c for c in pickable if c.id in shown_ids]
 
     series = [
         {"label": c.name, "color": CATEGORY_COLOR_SLOTS[i], "category_ids": {c.id}}
-        for i, c in enumerate(categories[:7])
+        for i, c in enumerate(shown)
     ]
-    if len(categories) > 7:
+    folded = all_ids - shown_ids
+    if folded:
         series.append(
             {
                 "label": "Other",
-                "color": CATEGORY_COLOR_SLOTS[7],
-                "category_ids": {c.id for c in categories[7:]},
+                "color": CATEGORY_COLOR_SLOTS[MAX_CHART_CATEGORIES],
+                "category_ids": folded,
             }
         )
     return series

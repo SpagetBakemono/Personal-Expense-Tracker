@@ -166,3 +166,13 @@ class ImportCapture(Base):
     balance_matches: Mapped[bool | None] = mapped_column(Boolean, nullable=True)
 
     account: Mapped["Account"] = relationship("Account", foreign_keys=[account_id])
+
+
+class Setting(Base):
+    """Small app preferences that should survive restarts (e.g. which
+    categories the Trends charts show). One row per key; value is JSON."""
+
+    __tablename__ = "settings"
+
+    key: Mapped[str] = mapped_column(String(64), primary_key=True)
+    value: Mapped[str] = mapped_column(Text)

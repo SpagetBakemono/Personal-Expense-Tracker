@@ -565,9 +565,20 @@ button:hover { opacity: 0.9; }
 .balance-hero { margin-bottom: 20px; }
 .balance-hero .stat-label { min-height: 0; }
 .balance-hero-value { font-size: 34px; letter-spacing: -0.01em; font-variant-numeric: tabular-nums; }
-.balance-hero-head, .balance-section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
-.balance-section-head { margin: 28px 0 12px; }
-.balance-section-head h2 { margin: 0; }
+.balance-hero-head, .section-head { display: flex; align-items: center; justify-content: space-between; gap: 12px; }
+.section-head { margin: 28px 0 12px; }
+.section-head h2 { margin: 0; }
+/* Trends "Categories" dropdown. */
+.cat-picker { position: relative; }
+.cat-picker summary { list-style: none; cursor: pointer; display: inline-flex; align-items: center; gap: 6px; }
+.cat-picker summary::-webkit-details-marker { display: none; }
+.cat-picker-count { color: var(--muted); font-variant-numeric: tabular-nums; }
+.cat-picker-menu { position: absolute; right: 0; top: calc(100% + 6px); z-index: 20; min-width: 200px; display: flex; flex-direction: column; gap: 2px; padding: 8px; background: var(--surface); border: 1px solid var(--border); border-radius: var(--radius); box-shadow: var(--shadow); }
+.cat-picker-option { display: flex; align-items: center; gap: 8px; padding: 6px 8px; border-radius: 6px; font-size: 14px; color: var(--text); cursor: pointer; text-transform: none; letter-spacing: 0; margin: 0; }
+.cat-picker-option:hover { background: var(--hover); }
+.cat-picker-option input { width: 16px; height: 16px; margin: 0; accent-color: var(--accent); }
+.cat-picker-option:has(input:disabled) { color: var(--muted); cursor: not-allowed; }
+.cat-picker-menu .btn-sm { margin-top: 6px; }
 .balance-toggle { display: inline-flex; align-items: center; justify-content: center; width: 32px; height: 32px; padding: 0; background: transparent; border: 1px solid var(--border); border-radius: 8px; color: var(--muted); cursor: pointer; }
 .balance-toggle:hover { color: var(--text); border-color: var(--muted); }
 .balance-toggle:focus-visible { outline: 3px solid var(--chart-line); outline-offset: 2px; }

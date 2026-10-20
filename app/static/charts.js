@@ -297,6 +297,19 @@
   // Catches container-only resizes too, where supported.
   if (window.ResizeObserver) new ResizeObserver(renderVisible).observe(document.querySelector(".container"));
 
+  // "Categories" dropdowns: at most data-max checked (one color each);
+  // the rest of the boxes disable until one is unchecked.
+  document.querySelectorAll(".cat-picker-menu").forEach(function (form) {
+    var max = parseInt(form.getAttribute("data-max"), 10);
+    var boxes = form.querySelectorAll("input[type=checkbox]");
+    function limit() {
+      var n = form.querySelectorAll("input[type=checkbox]:checked").length;
+      boxes.forEach(function (b) { b.disabled = !b.checked && n >= max; });
+    }
+    boxes.forEach(function (b) { b.addEventListener("change", limit); });
+    limit();
+  });
+
   document.querySelectorAll("[data-reset-scale]").forEach(function (btn) {
     btn.addEventListener("click", function () {
       var chart = btn.closest(".chart-card").querySelector(".chart");

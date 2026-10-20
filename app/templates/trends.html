@@ -13,6 +13,25 @@
 </div>
 {% endmacro %}
 
+{# "Categories" dropdown: which categories get their own color on one
+   chart; the rest fold into Other. Saved server-side. #}
+{% macro category_picker(kind) %}
+{% set pickable, shown_ids = category_choices[kind] %}
+<details class="cat-picker">
+  <summary class="btn-sm btn-sm-outline">Categories <span class="cat-picker-count">{{ shown_ids|length }}/{{ max_chart_categories }}</span></summary>
+  <form class="cat-picker-menu" method="post" action="/trends/categories" data-max="{{ max_chart_categories }}">
+    <input type="hidden" name="kind" value="{{ kind }}">
+    <input type="hidden" name="category_id" value="{{ selected_category_id or '' }}">
+    <input type="hidden" name="start" value="{{ start_value }}">
+    <input type="hidden" name="end" value="{{ end_value }}">
+    {% for c in pickable %}
+    <label class="cat-picker-option"><input type="checkbox" name="shown" value="{{ c.id }}" {{ "checked" if c.id in shown_ids }}> {{ c.name }}</label>
+    {% endfor %}
+    <button type="submit" class="btn-sm btn-sm-accent">Save</button>
+  </form>
+</details>
+{% endmacro %}
+
 {% block content %}
 
 <form class="filter-row" method="get" action="/trends">
@@ -36,7 +55,10 @@
   <noscript><button type="submit">Update</button></noscript>
 </form>
 
-<h2>Spending{{ " -- " + selected_category.name if selected_category else "" }}</h2>
+<div class="section-head">
+  <h2>Spending{{ " -- " + selected_category.name if selected_category else "" }}</h2>
+  {{ category_picker("expense") }}
+</div>
 <input type="radio" name="exp_scope" id="exp_living" class="toggle-input" checked>
 <input type="radio" name="exp_scope" id="exp_total" class="toggle-input">
 <div class="segmented">
@@ -46,7 +68,10 @@
 <div class="toggle-panel" data-for="exp_living">{{ bar_chart("expense_living", "No living expenses in this range.") }}</div>
 <div class="toggle-panel" data-for="exp_total">{{ bar_chart("expense_total", "No expenses in this range.") }}</div>
 
-<h2>Income</h2>
+<div class="section-head">
+  <h2>Income</h2>
+  {{ category_picker("income") }}
+</div>
 <input type="radio" name="inc_scope" id="inc_living" class="toggle-input" checked>
 <input type="radio" name="inc_scope" id="inc_total" class="toggle-input">
 <div class="segmented">
@@ -56,7 +81,7 @@
 <div class="toggle-panel" data-for="inc_living">{{ bar_chart("income_living", "No living income in this range.") }}</div>
 <div class="toggle-panel" data-for="inc_total">{{ bar_chart("income_total", "No income in this range.") }}</div>
 
-<div class="balance-section-head">
+<div class="section-head">
   <h2>Balance over time</h2>
   {% include "_balance_toggle.html" %}
 </div>

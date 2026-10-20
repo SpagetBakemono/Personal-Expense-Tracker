@@ -1,13 +1,21 @@
 from datetime import date
+from urllib.parse import urlencode
 
 from dateutil.relativedelta import relativedelta
-from fastapi import APIRouter, Depends, Request
+from fastapi import APIRouter, Depends, Form, Request
+from fastapi.responses import RedirectResponse
 from sqlalchemy import func, select
 from sqlalchemy.orm import Session
 
 from app.database import get_db
 from app.models import Category, CategoryKind, Transaction, TransactionType
-from app.services import get_balance_history, get_monthly_category_trend
+from app.services import (
+    MAX_CHART_CATEGORIES,
+    get_balance_history,
+    get_chart_category_choices,
+    get_monthly_category_trend,
+    save_chart_categories,
+)
 from app.templating import templates
 
 router = APIRouter()
@@ -101,5 +109,28 @@ def trends(
             "end_value": end_month.strftime("%Y-%m"),
             "charts": charts,
             "granularities": GRANULARITIES,
+            "category_choices": {
+                kind.value.lower(): get_chart_category_choices(db, kind)
+                for kind in (CategoryKind.EXPENSE, CategoryKind.INCOME)
+            },
+            "max_chart_categories": MAX_CHART_CATEGORIES,
         },
     )
+
+
+@router.post("/trends/categories")
+def save_trend_categories(
+    kind: str = Form(...),
+    shown: list[int] = Form([]),
+    category_id: str = Form(""),
+    start: str = Form(""),
+    end: str = Form(""),
+    db: Session = Depends(get_db),
+):
+    """The "Categories" dropdown: which categories get their own color on
+    the Spending or Income chart. Saved in the db, so it sticks."""
+    if kind in ("expense", "income"):
+        save_chart_categories(db, CategoryKind(kind), shown)
+    # Back to the same view (range and highlight), whatever was set.
+    query = urlencode({k: v for k, v in (("category_id", category_id), ("start", start), ("end", end)) if v})
+    return RedirectResponse(url="/trends" + ("?" + query if query else ""), status_code=303)
