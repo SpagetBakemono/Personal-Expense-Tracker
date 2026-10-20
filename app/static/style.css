@@ -694,3 +694,21 @@ td.num, th.num { text-align: right; font-variant-numeric: tabular-nums; white-sp
    spending (red) nor income (green). */
 .amount.transfer { color: var(--transfer); }
 .badge.badge-transfer { color: var(--transfer); border-color: var(--transfer); }
+
+/* Add/edit transaction form (_transaction_form.html). One gap spaces
+   every block evenly; toggle bars hold their radios inside. */
+.txn-form { gap: 16px; }
+.txn-form .segmented { margin: 0; }
+.segmented > input:checked + label { background: var(--accent-button); color: #ffffff; }
+.segmented > input:focus-visible + label, .chip-row input:focus-visible + .chip { outline: 3px solid var(--chart-line); outline-offset: 2px; }
+.amount-field { position: relative; }
+.amount-field input { height: 64px; font-size: 32px; font-weight: 500; text-align: center; font-variant-numeric: tabular-nums; padding: 0 40px; }
+.amount-prefix { position: absolute; left: 18px; top: 50%; transform: translateY(-50%); font-size: 22px; color: var(--muted); pointer-events: none; }
+.chip-row { display: flex; flex-wrap: wrap; gap: 8px; }
+.chip-row > span { display: contents; }
+.chip { display: inline-flex; align-items: center; margin: 0; padding: 8px 16px; font-size: 13px; color: var(--secondary); border: 1px solid var(--border); border-radius: 999px; cursor: pointer; user-select: none; }
+.chip:hover { border-color: var(--muted); }
+.chip-row input:checked + .chip { background: var(--accent-button); border-color: var(--accent-button); color: #ffffff; }
+.form-actions { display: flex; justify-content: space-between; align-items: center; gap: 12px; }
+.btn-danger-outline { background: transparent; color: var(--danger); border: 1px solid var(--error-border); }
+.btn-danger-outline:hover { background: var(--error-bg); opacity: 1; }
